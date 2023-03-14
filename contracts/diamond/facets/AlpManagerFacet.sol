@@ -22,7 +22,7 @@ contract AlpManagerFacet is ReentrancyGuard, Pausable, IAlpManager {
     address private constant BUSD = 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56;
 
     function initAlpManagerFacet(address alpToken) external {
-        LibAccessControlEnumerable.checkRole(LibAccessControlEnumerable.DEPLOYER_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.DEPLOYER_ROLE);
         require(alpToken != address(0), "AlpManagerFacet: Invalid alpToken");
         LibAlpManager.initialize(alpToken);
     }
