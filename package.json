@@ -1,0 +1,31 @@
+{
+  "name": "apollox-perp-contracts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "truffle-config.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "mocha --exit --recursive"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@chainlink/contracts": "^0.6.1",
+    "@openzeppelin/contracts": "^4.8.2",
+    "@openzeppelin/contracts-upgradeable": "^4.8.2",
+    "@openzeppelin/truffle-upgrades": "^1.17.0",
+    "shelljs": "^0.8.5",
+    "truffle-contract-size": "^2.0.1",
+    "truffle-plugin-verify": "^0.6.2",
+    "unchecked-counter": "^1.0.0",
+    "web3": "^1.8.2"
+  },
+  "devDependencies": {
+    "@openzeppelin/test-environment": "^0.1.9",
+    "@openzeppelin/test-helpers": "^0.5.16",
+    "chai": "^4.3.7",
+    "mocha": "^10.2.0"
+  }
+}
