@@ -11,20 +11,15 @@ import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-interface IExchangeTreasury {
-    function claim(bytes calldata message, bytes calldata signature) external;
-}
-
 contract VaultFacet is IVault, OnlySelf {
 
     using SafeERC20 for IERC20;
     using Address for address payable;
 
-    function initVaultFacet(address wbnb, address exchangeTreasury_) external {
-        LibAccessControlEnumerable.checkRole(LibAccessControlEnumerable.DEPLOYER_ROLE);
+    function initVaultFacet(address wbnb) external {
+        LibAccessControlEnumerable.checkRole(Constants.DEPLOYER_ROLE);
         require(wbnb != address(0), "VaultFacet: Invalid wbnb");
-        require(exchangeTreasury_ != address(0), "VaultFacet: Invalid exchangeTreasury_");
-        LibVault.initialize(wbnb, exchangeTreasury_);
+        LibVault.initialize(wbnb);
     }
 
     function addToken(
