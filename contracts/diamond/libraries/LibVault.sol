@@ -64,19 +64,14 @@ library LibVault {
     event SetSecurityMarginP(uint16 oldSecurityMarginP, uint16 securityMarginP);
     event CloseTradeRemoveLiquidity(address indexed token, uint256 amount);
 
-    function initialize(address wbnb, address exchangeTreasury_) internal {
+    function initialize(address wbnb) internal {
         VaultStorage storage vs = vaultStorage();
-        require(vs.wbnb == address(0) && vs.exchangeTreasury == address(0), "LibAlpManager: Already initialized");
+        require(vs.wbnb == address(0), "LibAlpManager: Already initialized");
         vs.wbnb = wbnb;
-        vs.exchangeTreasury = exchangeTreasury_;
     }
 
     function WBNB() internal view returns (address) {
         return vaultStorage().wbnb;
-    }
-
-    function exchangeTreasury() internal view returns (address) {
-        return vaultStorage().exchangeTreasury;
     }
 
     function addToken(
