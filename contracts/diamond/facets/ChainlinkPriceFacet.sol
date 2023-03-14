@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "../../utils/Constants.sol";
 import "../interfaces/IOraclePrice.sol";
 import "../interfaces/IChainlinkPrice.sol";
 import "../libraries/LibChainlinkPrice.sol";
@@ -10,17 +11,15 @@ import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 contract ChainlinkPriceFacet is IChainlinkPrice {
 
-    bytes32 public constant PRICE_FEED_OPERATOR_ROLE = keccak256("PRICE_FEED_OPERATOR_ROLE");
-
     function addChainlinkPriceFeed(address token, address priceFeed) external override {
-        LibAccessControlEnumerable.checkRole(PRICE_FEED_OPERATOR_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.PRICE_FEED_OPERATOR_ROLE);
         require(token != address(0), "ChainlinkPriceFacet: Token address can't be 0 address");
         require(priceFeed != address(0), "ChainlinkPriceFacet: Price feed address can't be 0 address");
         LibChainlinkPrice.addChainlinkPriceFeed(token, priceFeed);
     }
 
     function removeChainlinkPriceFeed(address token) external override {
-        LibAccessControlEnumerable.checkRole(PRICE_FEED_OPERATOR_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.PRICE_FEED_OPERATOR_ROLE);
         require(token != address(0), "ChainlinkPriceFacet: Token address can't be 0 address");
         LibChainlinkPrice.removeChainlinkPriceFeed(token);
     }
