@@ -8,8 +8,6 @@ library LibAccessControlEnumerable {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     bytes32 constant ACCESS_CONTROL_STORAGE_POSITION = keccak256("apollox.access.control.storage");
-    bytes32 constant DEFAULT_ADMIN_ROLE = 0x00;
-    bytes32 constant DEPLOYER_ROLE = keccak256("DEPLOYER_ROLE");
 
     event RoleAdminChanged(bytes32 indexed role, bytes32 indexed previousAdminRole, bytes32 indexed newAdminRole);
     event RoleGranted(bytes32 indexed role, address indexed account, address indexed sender);
