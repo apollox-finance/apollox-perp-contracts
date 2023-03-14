@@ -279,7 +279,7 @@ contract TradingCheckerFacet is ITradingChecker {
         require(data.amountIn > openFee, "TradingCheckerFacet: The amount is too small");
 
         // marginUsd = (amountIn - openFee) / token.price
-        uint marginUsd = (data.amountIn - openFee) * 1e26 / (token.price * (10 ** token.decimals));
+        uint marginUsd = (data.amountIn - openFee) * token.price * 1e10 / (10 ** token.decimals);
         // leverage = notionalUsd / marginUsd
         uint leverage_10000 = notionalUsd * 1e4 / marginUsd;
         require(
