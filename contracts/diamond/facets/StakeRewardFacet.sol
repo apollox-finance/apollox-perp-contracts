@@ -12,7 +12,7 @@ contract StakeRewardFacet is IStakeReward, Pausable, ReentrancyGuard {
 
     /* ========== initialize ========== */
     function initializeStakeRewardFacet(address _stakingToken) external {
-        LibAccessControlEnumerable.checkRole(LibAccessControlEnumerable.DEPLOYER_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.DEPLOYER_ROLE);
         require(_stakingToken != address(0), "Invalid _stakingToken");
         LibStakeReward.initialize(_stakingToken);
     }
