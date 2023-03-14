@@ -38,8 +38,8 @@ library LibVault {
         // tokenAddress => amount
         mapping(address => uint256) treasury;
         address wbnb;
-        address exchangeTreasury;
-        uint16 securityMarginP;  // %
+        address exchangeTreasury; // obsolete
+        uint16 securityMarginP;   // %
     }
 
     function vaultStorage() internal pure returns (VaultStorage storage vs) {
