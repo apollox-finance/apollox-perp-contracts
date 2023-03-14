@@ -1,11 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "../../utils/Constants.sol";
 import "../libraries/LibDiamond.sol";
 
 abstract contract Pausable {
-
-    bytes32 internal constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
 
     event Paused(address account);
     event Unpaused(address account);
