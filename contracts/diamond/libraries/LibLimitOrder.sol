@@ -123,7 +123,7 @@ library LibLimitOrder {
         ILimitOrder.LimitOrder memory order,
         bytes32 orderHash
     ) private {
-        bytes32[] storage userOrderHashes = los.userLimitOrderHashes[msg.sender];
+        bytes32[] storage userOrderHashes = los.userLimitOrderHashes[order.user];
         uint256 last = userOrderHashes.length - 1;
         uint256 orderIndex = order.userOpenOrderIndex;
         if (orderIndex != last) {
