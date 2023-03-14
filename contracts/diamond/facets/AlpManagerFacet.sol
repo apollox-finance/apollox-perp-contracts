@@ -36,7 +36,7 @@ contract AlpManagerFacet is ReentrancyGuard, Pausable, IAlpManager {
     }
 
     function setCoolingDuration(uint256 coolingDuration_) external override {
-        LibAccessControlEnumerable.checkRole(ADMIN_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
         LibAlpManager.AlpManagerStorage storage ams = LibAlpManager.alpManagerStorage();
         ams.coolingDuration = coolingDuration_;
     }
