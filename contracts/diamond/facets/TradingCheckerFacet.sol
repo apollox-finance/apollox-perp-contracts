@@ -205,7 +205,7 @@ contract TradingCheckerFacet is ITradingChecker {
                 return (false, 0, 0, Refund.USER_PRICE);
             }
             // 4. Whether the Stop Loss will be triggered immediately at the current price
-            if (marketPrice >= order.stopLoss) {
+            if (order.stopLoss > 0 && marketPrice >= order.stopLoss) {
                 return (false, 0, 0, Refund.SL);
             }
             // pair OI check
