@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
-
+import "../utils/Constants.sol";
 import "./libraries/LibDiamond.sol";
 import "./interfaces/IDiamondCut.sol";
 import "./interfaces/IDiamondLoupe.sol";
@@ -9,8 +9,8 @@ import "./libraries/LibAccessControlEnumerable.sol";
 contract ApolloX {
 
     constructor(address admin, address deployer, address _diamondCutFacet, address _diamondLoupeFacet, address _init) payable {
-        LibAccessControlEnumerable.grantRole(LibAccessControlEnumerable.DEFAULT_ADMIN_ROLE, admin);
-        LibAccessControlEnumerable.grantRole(LibAccessControlEnumerable.DEPLOYER_ROLE, deployer);
+        LibAccessControlEnumerable.grantRole(Constants.DEFAULT_ADMIN_ROLE, admin);
+        LibAccessControlEnumerable.grantRole(Constants.DEPLOYER_ROLE, deployer);
 
         // Add the diamondCut external function from the diamondCutFacet
         IDiamondCut.FacetCut[] memory cut = new IDiamondCut.FacetCut[](2);
