@@ -7,9 +7,12 @@ import "../interfaces/IPairsManager.sol";
 import "../interfaces/ITradingPortal.sol";
 import "../libraries/LibTradingCore.sol";
 import "../libraries/LibAccessControlEnumerable.sol";
+import "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 contract TradingCoreFacet is ITradingCore, OnlySelf {
+
+    using SignedMath for int256;
 
     function getPairQty(address pairBase) external view override returns (PairQty memory) {
         ITradingCore.PairPositionInfo memory ppi = LibTradingCore.tradingCoreStorage().pairPositionInfos[pairBase];
@@ -90,19 +93,153 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         LibTradingCore.TradingCoreStorage storage tcs = LibTradingCore.tradingCoreStorage();
         PairPositionInfo storage ppi = tcs.pairPositionInfos[pairBase];
         if (ppi.longQty > 0 || ppi.shortQty > 0) {
-            uint256 lpReceiveFundingFeeUsd = LibTradingCore.updateFundingFee(ppi, pairBase, marketPrice);
+            uint256 lpReceiveFundingFeeUsd = _updateFundingFee(ppi, pairBase, marketPrice);
             if (lpReceiveFundingFeeUsd > 0) {
                 ITradingPortal(address(this)).settleLpFundingFee(lpReceiveFundingFeeUsd);
             }
         } else {
             ppi.lastFundingFeeBlock = block.number;
         }
-        LibTradingCore.updatePairQtyAndAvgPrice(tcs, ppi, pairBase, qty, userPrice, isOpen, isLong);
+        _updatePairQtyAndAvgPrice(tcs, ppi, pairBase, qty, userPrice, isOpen, isLong);
         emit UpdatePairPositionInfo(
             pairBase, ppi.lastFundingFeeBlock, ppi.longQty, ppi.shortQty,
             ppi.longAccFundingFeePerShare, ppi.lpAveragePrice
         );
         return ppi.longAccFundingFeePerShare;
+    }
+    
+    function _updateFundingFee(
+        ITradingCore.PairPositionInfo storage ppi, address pairBase, uint256 marketPrice
+    ) private returns (uint256 lpReceiveFundingFeeUsd){
+        int256 oldLongAccFundingFeePerShare = ppi.longAccFundingFeePerShare;
+        bool needTransfer = _updateAccFundingFeePerShare(ppi, pairBase);
+        if (needTransfer) {
+            int256 longReceiveFundingFeeUsd = int256(ppi.longQty * marketPrice) * (ppi.longAccFundingFeePerShare - oldLongAccFundingFeePerShare) / 1e18;
+            int256 shortReceiveFundingFeeUsd = int256(ppi.shortQty * marketPrice) * (ppi.longAccFundingFeePerShare - oldLongAccFundingFeePerShare) * (- 1) / 1e18;
+            if (ppi.longQty > ppi.shortQty) {
+                require(
+                    (shortReceiveFundingFeeUsd == 0 && longReceiveFundingFeeUsd == 0) ||
+                    longReceiveFundingFeeUsd < 0 && shortReceiveFundingFeeUsd >= 0 && longReceiveFundingFeeUsd.abs() > shortReceiveFundingFeeUsd.abs(),
+                    "LibTrading: Funding fee calculation error. [LONG]"
+                );
+                lpReceiveFundingFeeUsd = (longReceiveFundingFeeUsd + shortReceiveFundingFeeUsd).abs();
+            } else {
+                require(
+                    (shortReceiveFundingFeeUsd == 0 && longReceiveFundingFeeUsd == 0) ||
+                    (shortReceiveFundingFeeUsd < 0 && longReceiveFundingFeeUsd >= 0 && shortReceiveFundingFeeUsd.abs() > longReceiveFundingFeeUsd.abs()),
+                    "LibTrading: Funding fee calculation error. [SHORT]"
+                );
+                lpReceiveFundingFeeUsd = (shortReceiveFundingFeeUsd + longReceiveFundingFeeUsd).abs();
+            }
+        }
+        return lpReceiveFundingFeeUsd;
+    }
+
+    function _updateAccFundingFeePerShare(
+        ITradingCore.PairPositionInfo storage ppi, address pairBase
+    ) private returns (bool){
+        if (block.number <= ppi.lastFundingFeeBlock) {
+            return false;
+        }
+        int256 fundingFeeR = LibTradingCore.fundingFeeRate(ppi, pairBase);
+        // (ppi.longQty > ppi.shortQty) & (fundingFeeRate > 0) & (Long - money <==> Short + money) & (longAcc < 0)
+        // (ppi.longQty < ppi.shortQty) & (fundingFeeRate < 0) & (Long + money <==> Short - money) & (longAcc > 0)
+        // (ppi.longQty == ppi.shortQty) & (fundingFeeRate == 0)
+        ppi.longAccFundingFeePerShare += fundingFeeR * (- 1) * int256(block.number - ppi.lastFundingFeeBlock);
+        ppi.lastFundingFeeBlock = block.number;
+        return true;
+    }
+
+    function _updatePairQtyAndAvgPrice(
+        LibTradingCore.TradingCoreStorage storage tcs,
+        ITradingCore.PairPositionInfo storage ppi,
+        address pairBase, uint256 qty,
+        uint256 userPrice, bool isOpen, bool isLong
+    ) private {
+        if (isOpen) {
+            if (ppi.longQty == 0 && ppi.shortQty == 0) {
+                ppi.pairBase = pairBase;
+                ppi.pairIndex = uint16(tcs.hasPositionPairs.length);
+                tcs.hasPositionPairs.push(pairBase);
+            }
+            if (isLong) {
+                // LP Increase position
+                if (ppi.longQty >= ppi.shortQty) {
+                    ppi.lpAveragePrice = uint64((ppi.lpAveragePrice * (ppi.longQty - ppi.shortQty) + userPrice * qty) / (ppi.longQty + qty - ppi.shortQty));
+                }
+                // LP Reverse open position
+                else if (ppi.longQty < ppi.shortQty && ppi.longQty + qty > ppi.shortQty) {
+                    ppi.lpAveragePrice = uint64(userPrice);
+                }
+                // LP position == 0
+                else if (ppi.longQty < ppi.shortQty && ppi.longQty + qty == ppi.shortQty) {
+                    ppi.lpAveragePrice = 0;
+                }
+                // LP Reduce position, No change in average price
+                ppi.longQty += qty;
+            } else {
+                // LP Increase position
+                if (ppi.shortQty >= ppi.longQty) {
+                    ppi.lpAveragePrice = uint64((ppi.lpAveragePrice * (ppi.shortQty - ppi.longQty) + userPrice * qty) / (ppi.shortQty + qty - ppi.longQty));
+                }
+                // LP Reverse open position
+                else if (ppi.shortQty < ppi.longQty && ppi.shortQty + qty > ppi.longQty) {
+                    ppi.lpAveragePrice = uint64(userPrice);
+                }
+                // LP position == 0
+                else if (ppi.shortQty < ppi.longQty && ppi.shortQty + qty == ppi.longQty) {
+                    ppi.lpAveragePrice = 0;
+                }
+                // LP Reduce position, No change in average price
+                ppi.shortQty += qty;
+            }
+        } else {
+            if (isLong) {
+                // LP Reduce position, No change in average price
+                // if (ppi.longQty > ppi.shortQty && ppi.longQty - qty > ppi.shortQty)
+                // LP position == 0
+                if (ppi.longQty > ppi.shortQty && ppi.longQty - qty == ppi.shortQty) {
+                    ppi.lpAveragePrice = 0;
+                }
+                // LP Reverse open position
+                else if (ppi.longQty > ppi.shortQty && ppi.longQty - qty < ppi.shortQty) {
+                    ppi.lpAveragePrice = uint64(userPrice);
+                }
+                // LP Increase position
+                else if (ppi.longQty <= ppi.shortQty) {
+                    ppi.lpAveragePrice = uint64((ppi.lpAveragePrice * (ppi.shortQty - ppi.longQty) + userPrice * qty) / (ppi.shortQty - ppi.longQty + qty));
+                }
+                ppi.longQty -= qty;
+            } else {
+                // LP Reduce position, No change in average price
+                // if (ppi.longQty > ppi.shortQty && ppi.longQty - qty > ppi.shortQty)
+                // LP position == 0
+                if (ppi.shortQty > ppi.longQty && ppi.shortQty - qty == ppi.longQty) {
+                    ppi.lpAveragePrice = 0;
+                }
+                // LP Reverse open position
+                else if (ppi.shortQty > ppi.longQty && ppi.shortQty - qty < ppi.longQty) {
+                    ppi.lpAveragePrice = uint64(userPrice);
+                }
+                // LP Increase position
+                else if (ppi.shortQty <= ppi.longQty) {
+                    ppi.lpAveragePrice = uint64((ppi.lpAveragePrice * (ppi.longQty - ppi.shortQty) + userPrice * qty) / (ppi.longQty - ppi.shortQty + qty));
+                }
+                ppi.shortQty -= qty;
+            }
+            if (ppi.longQty == 0 && ppi.shortQty == 0) {
+                address[] storage pairs = tcs.hasPositionPairs;
+                uint lastIndex = pairs.length - 1;
+                uint removeIndex = ppi.pairIndex;
+                if (lastIndex != removeIndex) {
+                    address lastPair = pairs[lastIndex];
+                    pairs[removeIndex] = lastPair;
+                    tcs.pairPositionInfos[lastPair].pairIndex = uint16(removeIndex);
+                }
+                pairs.pop();
+                delete tcs.pairPositionInfos[pairBase];
+            }
+        }
     }
 
     function lpUnrealizedPnlUsd() external view override returns (int256 unrealizedPnlUsd) {
