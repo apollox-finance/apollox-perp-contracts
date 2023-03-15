@@ -56,7 +56,7 @@ library LibTrading {
         } else {
             fundingFeeUsd = int256(ot.qty * marketPrice) * (longAccFundingFeePerShare - ot.longAccFundingFeePerShare) * (- 1) / 1e18;
         }
-        fundingFee = fundingFeeUsd * int256((10 ** mt.decimals) / (1e10 * mt.price));
+        fundingFee = fundingFeeUsd * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         return fundingFee;
     }
 
