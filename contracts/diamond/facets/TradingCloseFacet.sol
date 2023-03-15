@@ -297,13 +297,13 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
             if (t.executionType == ExecutionType.TP) {
                 if ((ot.isLong && marketPrice < ot.takeProfit) || (!ot.isLong && marketPrice > ot.takeProfit)) {
                     emit ExecuteCloseRejected(ot.user, t.tradeHash, t.executionType, t.price, marketPrice);
-                    return;
+                    continue;
                 }
                 _executeTp(ts, ot, t.tradeHash, marketPrice, closePrice);
             } else if (t.executionType == ExecutionType.SL) {
                 if ((ot.isLong && marketPrice > ot.stopLoss) || (!ot.isLong && marketPrice < ot.stopLoss)) {
                     emit ExecuteCloseRejected(ot.user, t.tradeHash, t.executionType, t.price, marketPrice);
-                    return;
+                    continue;
                 }
                 _executeSl(ts, ot, t.tradeHash, marketPrice, closePrice);
             } else {
@@ -311,7 +311,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                 (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee) = ITradingChecker(address(this)).executeLiquidateCheck(ot, marketPrice, closePrice, longAccFundingFeePerShare);
                 if (!needLiq) {
                     emit ExecuteCloseRejected(ot.user, t.tradeHash, ExecutionType.LIQ, t.price, marketPrice);
-                    return;
+                    continue;
                 }
                 _executeLiquidate(ts, ot, t.tradeHash, closePrice, pnl, fundingFee, closeFee);
             }
