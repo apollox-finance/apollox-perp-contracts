@@ -94,6 +94,8 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
             if (lpReceiveFundingFeeUsd > 0) {
                 ITradingPortal(address(this)).settleLpFundingFee(lpReceiveFundingFeeUsd);
             }
+        } else {
+            ppi.lastFundingFeeBlock = block.number;
         }
         LibTradingCore.updatePairQtyAndAvgPrice(tcs, ppi, pairBase, qty, userPrice, isOpen, isLong);
         emit UpdatePairPositionInfo(
