@@ -413,12 +413,12 @@ contract TradingCheckerFacet is ITradingChecker {
     }
 
     function executeLiquidateCheck(
-        ITrading.OpenTrade memory ot, uint256 marketPrice, uint256 closePrice, int256 longAccFundingFeePerShare
+        ITrading.OpenTrade memory ot, uint256 marketPrice, uint256 closePrice
     ) external view returns (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee) {
         IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(ot.tokenIn);
         IPairsManager.TradingPair memory pair = IPairsManager(address(this)).getPairForTrading(ot.pairBase);
 
-        fundingFee = LibTrading.calcFundingFee(ot, mt, marketPrice, longAccFundingFeePerShare);
+        fundingFee = LibTrading.calcFundingFee(ot, mt, marketPrice);
 
         uint256 closeNotionalUsd = closePrice * ot.qty;
         closeFee = closeNotionalUsd * pair.feeConfig.closeFeeP * (10 ** mt.decimals) / (1e4 * 1e10 * mt.price);
