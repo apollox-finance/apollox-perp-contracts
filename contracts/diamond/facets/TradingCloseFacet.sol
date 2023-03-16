@@ -307,12 +307,12 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                 }
                 _executeSl(ts, ot, t.tradeHash, marketPrice, closePrice);
             } else {
-                int256 longAccFundingFeePerShare = ITradingCore(address(this)).updatePairPositionInfo(ot.pairBase, closePrice, marketPrice, ot.qty, ot.isLong, false);
-                (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee) = ITradingChecker(address(this)).executeLiquidateCheck(ot, marketPrice, closePrice, longAccFundingFeePerShare);
+                (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee) = ITradingChecker(address(this)).executeLiquidateCheck(ot, marketPrice, closePrice);
                 if (!needLiq) {
                     emit ExecuteCloseRejected(ot.user, t.tradeHash, ExecutionType.LIQ, t.price, marketPrice);
                     continue;
                 }
+                ITradingCore(address(this)).updatePairPositionInfo(ot.pairBase, closePrice, marketPrice, ot.qty, ot.isLong, false);
                 _executeLiquidate(ts, ot, t.tradeHash, closePrice, pnl, fundingFee, closeFee);
             }
         }
