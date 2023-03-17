@@ -100,12 +100,13 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         } else {
             ppi.lastFundingFeeBlock = block.number;
         }
+        longAccFundingFeePerShare = ppi.longAccFundingFeePerShare;
         _updatePairQtyAndAvgPrice(tcs, ppi, pairBase, qty, userPrice, isOpen, isLong);
         emit UpdatePairPositionInfo(
             pairBase, ppi.lastFundingFeeBlock, ppi.longQty, ppi.shortQty,
-            ppi.longAccFundingFeePerShare, ppi.lpAveragePrice
+            longAccFundingFeePerShare, ppi.lpAveragePrice
         );
-        return ppi.longAccFundingFeePerShare;
+        return longAccFundingFeePerShare;
     }
     
     function _updateFundingFee(
