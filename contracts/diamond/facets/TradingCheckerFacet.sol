@@ -275,11 +275,12 @@ contract TradingCheckerFacet is ITradingChecker {
         require(notionalUsd <= lms[lms.length - 1].notionalUsd, "TradingCheckerFacet: Position is too large");
 
         IPairsManager.LeverageMargin memory lm = marginLeverage(lms, notionalUsd);
-        uint openFee = notionalUsd * pair.feeConfig.openFeeP * (10 ** token.decimals) / (1e4 * 1e10 * token.price);
-        require(data.amountIn > openFee, "TradingCheckerFacet: The amount is too small");
+        uint openFeeUsd = notionalUsd * pair.feeConfig.openFeeP / 1e4;
+        uint amountInUsd = data.amountIn * token.price * 1e10 / (10 ** token.decimals);
+        require(amountInUsd > openFeeUsd + tc.executionFeeUsd, "TradingCheckerFacet: The amount is too small");
 
-        // marginUsd = (amountIn - openFee) / token.price
-        uint marginUsd = (data.amountIn - openFee) * token.price * 1e10 / (10 ** token.decimals);
+        // marginUsd = amountInUsd - openFeeUsd - executionFeeUsd
+        uint marginUsd = amountInUsd - openFeeUsd - tc.executionFeeUsd;
         // leverage = notionalUsd / marginUsd
         uint leverage_10000 = notionalUsd * 1e4 / marginUsd;
         require(
@@ -352,64 +353,69 @@ contract TradingCheckerFacet is ITradingChecker {
 
     function marketTradeCallbackCheck(
         ITrading.PendingTrade memory pt, uint256 marketPrice
-    ) external view returns (bool result, uint256 entryPrice, Refund refund) {
+    ) external view returns (bool result, uint96 openFee, uint96 executionFee, uint256 entryPrice, Refund refund) {
         MarketTradeCallbackCheckTuple memory tuple = _buildMarketTradeCallbackCheckTuple(pt, marketPrice);
         if ((pt.isLong && tuple.entryPrice > pt.price) || (!pt.isLong && tuple.entryPrice < pt.price)) {
-            return (false, tuple.entryPrice, Refund.USER_PRICE);
+            return (false, 0, 0, tuple.entryPrice, Refund.USER_PRICE);
         }
 
         if (tuple.notionalUsd < tuple.tc.minNotionalUsd) {
-            return (false, tuple.entryPrice, Refund.MIN_NOTIONAL_USD);
+            return (false, 0, 0, tuple.entryPrice, Refund.MIN_NOTIONAL_USD);
         }
 
         IPairsManager.LeverageMargin[] memory lms = tuple.pair.leverageMargins;
         if (tuple.notionalUsd > lms[lms.length - 1].notionalUsd) {
-            return (false, tuple.entryPrice, Refund.MAX_NOTIONAL_USD);
+            return (false, 0, 0, tuple.entryPrice, Refund.MAX_NOTIONAL_USD);
         }
 
         IPairsManager.LeverageMargin memory lm = marginLeverage(lms, tuple.notionalUsd);
         uint openFeeUsd = tuple.notionalUsd * tuple.pair.feeConfig.openFeeP / 1e4;
         uint amountInUsd = pt.amountIn * tuple.token.price * 1e10 / (10 ** tuple.token.decimals);
-        if (amountInUsd <= openFeeUsd) {
-            return (false, tuple.entryPrice, Refund.AMOUNT_IN);
+        if (amountInUsd <= openFeeUsd + tuple.tc.executionFeeUsd) {
+            return (false, 0, 0, tuple.entryPrice, Refund.AMOUNT_IN);
         }
 
-        // marginUsd = amountInUsd - openFeeUsd
-        uint marginUsd = amountInUsd - openFeeUsd;
+        // marginUsd = amountInUsd - openFeeUsd - executionFeeUsd
+        uint marginUsd = amountInUsd - openFeeUsd - tuple.tc.executionFeeUsd;
         // leverage_10000 = notionalUsd * 10000 / marginUsd
         uint leverage_10000 = tuple.notionalUsd * 1e4 / marginUsd;
         if (leverage_10000 > uint(1e4) * lm.maxLeverage) {
-            return (false, tuple.entryPrice, Refund.MAX_LEVERAGE);
+            return (false, 0, 0, tuple.entryPrice, Refund.MAX_LEVERAGE);
         }
 
         if (!checkTp(pt.isLong, pt.takeProfit, tuple.entryPrice, leverage_10000, tuple.tc.maxTakeProfitP)) {
-            return (false, entryPrice, Refund.TP);
+            return (false, 0, 0, entryPrice, Refund.TP);
         }
 
         if (!checkSl(pt.isLong, pt.stopLoss, tuple.entryPrice)) {
-            return (false, tuple.entryPrice, Refund.SL);
+            return (false, 0, 0, tuple.entryPrice, Refund.SL);
         }
 
         if (pt.isLong) {
             // pair OI check
             if (tuple.notionalUsd + tuple.pairQty.longQty * tuple.entryPrice > tuple.pair.pairConfig.maxLongOiUsd) {
-                return (false, tuple.entryPrice, Refund.PAIR_OI);
+                return (false, 0, 0, tuple.entryPrice, Refund.PAIR_OI);
             }
             // open lost check
             if ((tuple.entryPrice - marketPrice) * pt.qty * 1e4 >= marginUsd * lm.initialLostP) {
-                return (false, tuple.entryPrice, Refund.OPEN_LOST);
+                return (false, 0, 0, tuple.entryPrice, Refund.OPEN_LOST);
             }
         } else {
             // pair OI check
             if (tuple.notionalUsd + tuple.pairQty.shortQty * tuple.entryPrice > tuple.pair.pairConfig.maxShortOiUsd) {
-                return (false, tuple.entryPrice, Refund.PAIR_OI);
+                return (false, 0, 0, tuple.entryPrice, Refund.PAIR_OI);
             }
             // open lost check
             if ((marketPrice - tuple.entryPrice) * pt.qty * 1e4 >= marginUsd * lm.initialLostP) {
-                return (false, tuple.entryPrice, Refund.OPEN_LOST);
+                return (false, 0, 0, tuple.entryPrice, Refund.OPEN_LOST);
             }
         }
-        return (true, tuple.entryPrice, Refund.NO);
+        return (
+        true,
+        uint96(openFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
+        uint96(tuple.tc.executionFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
+        tuple.entryPrice, Refund.NO
+        );
     }
 
     function executeLiquidateCheck(
