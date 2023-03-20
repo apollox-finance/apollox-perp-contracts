@@ -72,10 +72,9 @@ contract TradingCheckerFacet is ITradingChecker {
         _checkParameters(data);
 
         IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(data.tokenIn);
-        require(token.token != address(0) && token.asMargin, "TradingCheckerFacet: This token is not supported as margin");
+        require(token.asMargin, "TradingCheckerFacet: This token is not supported as margin");
 
         IPairsManager.TradingPair memory pair = IPairsManager(address(this)).getPairForTrading(data.pairBase);
-        require(pair.base != address(0), "TradingCheckerFacet: Trading for this pair are not supported");
         require(pair.status == IPairsManager.PairStatus.AVAILABLE, "LimitBookFacet: The pair is temporarily unavailable for trading");
 
         ITradingConfig.TradingConfig memory tc = ITradingConfig(address(this)).getTradingConfig();
@@ -246,10 +245,9 @@ contract TradingCheckerFacet is ITradingChecker {
         _checkParameters(data);
 
         IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(data.tokenIn);
-        require(token.token != address(0) && token.asMargin, "TradingCheckerFacet: This token is not supported as margin");
+        require(token.asMargin, "TradingCheckerFacet: This token is not supported as margin");
 
         IPairsManager.TradingPair memory pair = IPairsManager(address(this)).getPairForTrading(data.pairBase);
-        require(pair.base != address(0), "TradingCheckerFacet: Trading for this pair are not supported");
         require(pair.status == IPairsManager.PairStatus.AVAILABLE, "LimitBookFacet: The pair is temporarily unavailable for trading");
 
         ITradingConfig.TradingConfig memory tc = ITradingConfig(address(this)).getTradingConfig();
