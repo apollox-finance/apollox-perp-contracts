@@ -53,12 +53,13 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
         LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
         ITrading.PendingTrade memory pt = ts.pendingTrades[tradeHash];
         uint256 marketPrice = pt.isLong ? upperPrice : lowerPrice;
-        (bool result, uint256 entryPrice, ITradingChecker.Refund refund) = ITradingChecker(address(this)).marketTradeCallbackCheck(pt, marketPrice);
+        (bool result, uint96 openFee, uint96 executionFee, uint256 entryPrice, ITradingChecker.Refund refund) = ITradingChecker(address(this)).marketTradeCallbackCheck(pt, marketPrice);
         if (!result) {
             IERC20(pt.tokenIn).safeTransfer(pt.user, pt.amountIn);
             emit PendingTradeRefund(pt.user, tradeHash, refund);
         } else {
-            _marketTradeDeal(ts, pt, tradeHash, marketPrice, entryPrice);
+            IERC20(pt.tokenIn).safeTransfer(msg.sender, executionFee);
+            _marketTradeDeal(ts, pt, tradeHash, openFee, executionFee, marketPrice, entryPrice);
         }
         // clear pending data
         ts.pendingTradeAmountIns[pt.tokenIn] -= pt.amountIn;
@@ -67,13 +68,9 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
 
     function _marketTradeDeal(
         LibTrading.TradingStorage storage ts, ITrading.PendingTrade memory pt,
-        bytes32 tradeHash, uint256 marketPrice, uint256 entryPrice
+        bytes32 tradeHash, uint96 openFee, uint96 executionFee, uint256 marketPrice, uint256 entryPrice
     ) private {
-        uint notionalUsd = entryPrice * pt.qty;
-        IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(pt.tokenIn);
-        uint openFee = notionalUsd * IPairsManager(address(this)).getPairFeeConfig(pt.pairBase).openFeeP * (10 ** token.decimals) / (1e4 * 1e10 * token.price);
-        uint margin = pt.amountIn - openFee;
-
+        uint96 margin = uint96(pt.amountIn) - openFee - executionFee;
         LibTrading.increaseOpenTradeAmount(ts, pt.tokenIn, margin);
         // update fundingFee
         int256 longAccFundingFeePerShare = ITradingCore(address(this)).updatePairPositionInfo(pt.pairBase, entryPrice, marketPrice, pt.qty, pt.isLong, true);
@@ -81,8 +78,8 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
         uint24 broker = IFeeManager(address(this)).chargeOpenFee(pt.tokenIn, openFee, pt.broker);
         bytes32[] storage tradeHashes = ts.userOpenTradeHashes[pt.user];
         OpenTrade memory ot = OpenTrade(
-            pt.user, uint32(tradeHashes.length), uint64(entryPrice), pt.pairBase, pt.tokenIn, uint96(margin), pt.stopLoss,
-            pt.takeProfit, broker, pt.isLong, uint96(openFee), longAccFundingFeePerShare, 0, uint40(block.timestamp), pt.qty
+            pt.user, uint32(tradeHashes.length), uint64(entryPrice), pt.pairBase, pt.tokenIn, margin, pt.stopLoss,
+            pt.takeProfit, broker, pt.isLong, openFee, longAccFundingFeePerShare, executionFee, uint40(block.timestamp), pt.qty
         );
         ts.openTrades[tradeHash] = ot;
         tradeHashes.push(tradeHash);
