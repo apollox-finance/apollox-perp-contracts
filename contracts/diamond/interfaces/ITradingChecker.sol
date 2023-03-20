@@ -33,7 +33,7 @@ interface ITradingChecker {
 
     function marketTradeCallbackCheck(
         ITrading.PendingTrade memory pt, uint256 marketPrice
-    ) external view returns (bool result, uint256 entryPrice, Refund refund);
+    ) external view returns (bool result, uint96 openFee, uint96 executionFee, uint256 entryPrice, Refund refund);
 
     function executeLiquidateCheck(
         ITrading.OpenTrade memory ot, uint256 marketPrice, uint256 closePrice 
