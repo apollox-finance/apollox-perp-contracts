@@ -21,7 +21,7 @@ contract TradingCheckerFacet is ITradingChecker {
             return takeProfit > entryPrice && (takeProfit - entryPrice) * leverage_10000 <= maxTakeProfitP * entryPrice;
         } else {
             // The takeProfit price must be set and the percentage of profit must not exceed the maximum allowed
-            return takeProfit > 0 && takeProfit < entryPrice && (entryPrice - takeProfit) * leverage_10000 <= maxTakeProfitP * takeProfit;
+            return takeProfit > 0 && takeProfit < entryPrice && (entryPrice - takeProfit) * leverage_10000 <= maxTakeProfitP * entryPrice;
         }
     }
 
