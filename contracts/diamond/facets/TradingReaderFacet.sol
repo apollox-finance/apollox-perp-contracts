@@ -12,7 +12,7 @@ contract TradingReaderFacet is ITradingReader {
 
     function getMarketInfo(address pairBase) public view override returns (MarketInfo memory) {
         ITradingCore.PairPositionInfo memory ppi = LibTradingCore.tradingCoreStorage().pairPositionInfos[pairBase];
-        return MarketInfo(pairBase, ppi.longQty, ppi.shortQty, ppi.lpAveragePrice, LibTradingCore.fundingFeeRate(ppi, pairBase));
+        return MarketInfo(pairBase, ppi.longQty, ppi.shortQty, ppi.lpLongAvgPrice, ppi.lpShortAvgPrice, LibTradingCore.fundingFeeRate(ppi, pairBase));
     }
 
     function getMarketInfos(address[] calldata pairBases) external view override returns (MarketInfo[] memory) {
