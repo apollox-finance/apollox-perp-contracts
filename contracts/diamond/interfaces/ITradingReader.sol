@@ -10,7 +10,8 @@ interface ITradingReader is ITrading {
         address pairBase;
         uint256 longQty;              // 1e10
         uint256 shortQty;             // 1e10
-        uint64 lpAveragePrice;        // 1e8
+        uint64 lpLongAvgPrice;        // 1e8
+        uint64 lpShortAvgPrice;       // 1e8
         int256 fundingFeeRate;        // 1e18
     }
 
