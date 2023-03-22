@@ -111,6 +111,11 @@ contract PairsManagerFacet is IPairsManager {
         LibPairsManager.updatePairFee(base, feeConfigIndex);
     }
 
+    function batchUpdatePairStatus(PairType pairType, PairStatus status) external override {
+        LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
+        LibPairsManager.batchUpdatePairStatus(pairType, status);
+    }
+
     function updatePairLeverageMargin(address base, LibPairsManager.LeverageMargin[] memory leverageMargins) external override {
         LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
