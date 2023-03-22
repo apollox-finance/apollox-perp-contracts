@@ -6,8 +6,8 @@ import "./IPairsManager.sol";
 interface ITradingCore {
 
     event UpdatePairPositionInfo(
-        address indexed pairBase, uint256 lastBlock, uint256 longQty,
-        uint256 shortQty, int256 longAccFundingFeePerShare, uint64 lpAveragePrice
+        address indexed pairBase, uint256 lastBlock, uint256 longQty, uint256 shortQty,
+        int256 longAccFundingFeePerShare, uint64 lpLongAvgPrice, uint64 lpShortAvgPrice
     );
 
     struct PairQty {
@@ -17,13 +17,14 @@ interface ITradingCore {
 
     struct PairPositionInfo {
         uint256 lastFundingFeeBlock;
-        uint256 longQty;                // 1e10
-        uint256 shortQty;               // 1e10
+        uint256 longQty;                   // 1e10
+        uint256 shortQty;                  // 1e10
         // shortAcc = longAcc * -1
         int256 longAccFundingFeePerShare;  // 1e18
-        uint64 lpAveragePrice;          // 1e8
+        uint64 lpLongAvgPrice;             // 1e8
         address pairBase;
         uint16 pairIndex;
+        uint64 lpShortAvgPrice;       
     }
 
     function getPairQty(address pairBase) external view returns (PairQty memory);
