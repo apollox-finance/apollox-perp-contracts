@@ -280,6 +280,19 @@ library LibPairsManager {
         emit UpdatePairStatus(base, oldStatus, status);
     }
 
+    function batchUpdatePairStatus(IPairsManager.PairType pairType, IPairsManager.PairStatus status) internal {
+        PairsManagerStorage storage pms = pairsManagerStorage();
+        address[] memory pairBases = pms.pairBases;
+        for (UC i = ZERO; i <= uc(pairBases.length); i = i + ONE) {
+            Pair storage pair = pms.pairs[pairBases[i.into()]];
+            if (pair.pairType == pairType) {
+                IPairsManager.PairStatus oldStatus = pair.status;
+                pair.status = status;
+                emit UpdatePairStatus(pair.base, oldStatus, status);
+            }
+        }
+    }
+
     function updatePairSlippage(address base, uint16 slippageConfigIndex) internal {
         PairsManagerStorage storage pms = pairsManagerStorage();
         Pair storage pair = pms.pairs[base];
