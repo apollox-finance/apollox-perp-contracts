@@ -104,7 +104,7 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         _updatePairQtyAndAvgPrice(tcs, ppi, pairBase, qty, userPrice, isOpen, isLong);
         emit UpdatePairPositionInfo(
             pairBase, ppi.lastFundingFeeBlock, ppi.longQty, ppi.shortQty,
-            longAccFundingFeePerShare, ppi.lpAveragePrice
+            longAccFundingFeePerShare, ppi.lpLongAvgPrice, ppi.lpShortAvgPrice
         );
         return longAccFundingFeePerShare;
     }
@@ -164,67 +164,23 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
                 tcs.hasPositionPairs.push(pairBase);
             }
             if (isLong) {
-                // LP Increase position
-                if (ppi.longQty >= ppi.shortQty) {
-                    ppi.lpAveragePrice = uint64((ppi.lpAveragePrice * (ppi.longQty - ppi.shortQty) + userPrice * qty) / (ppi.longQty + qty - ppi.shortQty));
-                }
-                // LP Reverse open position
-                else if (ppi.longQty < ppi.shortQty && ppi.longQty + qty > ppi.shortQty) {
-                    ppi.lpAveragePrice = uint64(userPrice);
-                }
-                // LP position == 0
-                else if (ppi.longQty < ppi.shortQty && ppi.longQty + qty == ppi.shortQty) {
-                    ppi.lpAveragePrice = 0;
-                }
+                ppi.lpShortAvgPrice = uint64((ppi.lpShortAvgPrice * ppi.longQty + userPrice * qty) / (ppi.longQty + qty));
                 // LP Reduce position, No change in average price
                 ppi.longQty += qty;
             } else {
-                // LP Increase position
-                if (ppi.shortQty >= ppi.longQty) {
-                    ppi.lpAveragePrice = uint64((ppi.lpAveragePrice * (ppi.shortQty - ppi.longQty) + userPrice * qty) / (ppi.shortQty + qty - ppi.longQty));
-                }
-                // LP Reverse open position
-                else if (ppi.shortQty < ppi.longQty && ppi.shortQty + qty > ppi.longQty) {
-                    ppi.lpAveragePrice = uint64(userPrice);
-                }
-                // LP position == 0
-                else if (ppi.shortQty < ppi.longQty && ppi.shortQty + qty == ppi.longQty) {
-                    ppi.lpAveragePrice = 0;
-                }
+                ppi.lpLongAvgPrice = uint64((ppi.lpLongAvgPrice * ppi.shortQty + userPrice * qty) / (ppi.shortQty + qty));
                 // LP Reduce position, No change in average price
                 ppi.shortQty += qty;
             }
         } else {
             if (isLong) {
-                // LP Reduce position, No change in average price
-                // if (ppi.longQty > ppi.shortQty && ppi.longQty - qty > ppi.shortQty)
-                // LP position == 0
-                if (ppi.longQty > ppi.shortQty && ppi.longQty - qty == ppi.shortQty) {
-                    ppi.lpAveragePrice = 0;
-                }
-                // LP Reverse open position
-                else if (ppi.longQty > ppi.shortQty && ppi.longQty - qty < ppi.shortQty) {
-                    ppi.lpAveragePrice = uint64(userPrice);
-                }
-                // LP Increase position
-                else if (ppi.longQty <= ppi.shortQty) {
-                    ppi.lpAveragePrice = uint64((ppi.lpAveragePrice * (ppi.shortQty - ppi.longQty) + userPrice * qty) / (ppi.shortQty - ppi.longQty + qty));
+                if (ppi.longQty == qty) {
+                    ppi.lpShortAvgPrice = 0;
                 }
                 ppi.longQty -= qty;
             } else {
-                // LP Reduce position, No change in average price
-                // if (ppi.longQty > ppi.shortQty && ppi.longQty - qty > ppi.shortQty)
-                // LP position == 0
-                if (ppi.shortQty > ppi.longQty && ppi.shortQty - qty == ppi.longQty) {
-                    ppi.lpAveragePrice = 0;
-                }
-                // LP Reverse open position
-                else if (ppi.shortQty > ppi.longQty && ppi.shortQty - qty < ppi.longQty) {
-                    ppi.lpAveragePrice = uint64(userPrice);
-                }
-                // LP Increase position
-                else if (ppi.shortQty <= ppi.longQty) {
-                    ppi.lpAveragePrice = uint64((ppi.lpAveragePrice * (ppi.longQty - ppi.shortQty) + userPrice * qty) / (ppi.longQty - ppi.shortQty + qty));
+                if (ppi.shortQty == qty) {
+                    ppi.lpLongAvgPrice = 0;
                 }
                 ppi.shortQty -= qty;
             }
@@ -250,11 +206,13 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
             address pairBase = hasPositionPairs[i.into()];
             PairPositionInfo memory ppi = tcs.pairPositionInfos[pairBase];
             (uint256 price,) = IPriceFacade(address(this)).getPriceFromCacheOrOracle(pairBase);
-            int256 lpAvgPrice = int256(uint256(ppi.lpAveragePrice));
-            if (ppi.longQty > ppi.shortQty) {// LP Short
-                unrealizedPnlUsd += int256(ppi.longQty - ppi.shortQty) * (lpAvgPrice - int256(price));
-            } else {// LP Long
-                unrealizedPnlUsd += int256(ppi.shortQty - ppi.longQty) * (int256(price) - lpAvgPrice);
+            // LP Short Position
+            if (ppi.longQty > 0) {
+                unrealizedPnlUsd += int256(ppi.longQty) * (int256(uint256(ppi.lpShortAvgPrice)) - int256(price));
+            }
+            // LP Long position
+            if (ppi.shortQty > 0) {
+                unrealizedPnlUsd += int256(ppi.shortQty) * (int256(price) - int256(uint256(ppi.lpLongAvgPrice)));
             }
         }
         return unrealizedPnlUsd;
