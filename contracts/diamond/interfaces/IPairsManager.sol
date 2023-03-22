@@ -116,6 +116,8 @@ interface IPairsManager {
     function removePair(address base) external;
 
     function updatePairStatus(address base, PairStatus status) external;
+    
+    function batchUpdatePairStatus(PairType pairType, PairStatus status) external;    
 
     function updatePairSlippage(address base, uint16 slippageConfigIndex) external;
 
