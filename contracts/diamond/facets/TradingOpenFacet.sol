@@ -58,7 +58,7 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
             IERC20(pt.tokenIn).safeTransfer(pt.user, pt.amountIn);
             emit PendingTradeRefund(pt.user, tradeHash, refund);
         } else {
-            IERC20(pt.tokenIn).safeTransfer(msg.sender, executionFee);
+            IERC20(pt.tokenIn).safeTransfer(tx.origin, executionFee);
             _marketTradeDeal(ts, pt, tradeHash, openFee, executionFee, marketPrice, entryPrice);
         }
         // clear pending data
