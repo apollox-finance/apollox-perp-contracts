@@ -74,7 +74,7 @@ contract PairsManagerFacet is IPairsManager {
     }
 
     function updatePairMaxOi(address base, uint256 maxLongOiUsd, uint256 maxShortOiUsd) external override {
-        LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
         LibPairsManager.updatePairMaxOi(base, maxLongOiUsd, maxShortOiUsd);
     }
@@ -94,9 +94,14 @@ contract PairsManagerFacet is IPairsManager {
     }
 
     function updatePairStatus(address base, PairStatus status) external override {
-        LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
         LibPairsManager.updatePairStatus(base, status);
+    }
+    
+    function batchUpdatePairStatus(PairType pairType, PairStatus status) external override {
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
+        LibPairsManager.batchUpdatePairStatus(pairType, status);
     }
 
     function updatePairSlippage(address base, uint16 slippageConfigIndex) external override {
@@ -109,11 +114,6 @@ contract PairsManagerFacet is IPairsManager {
         LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
         LibPairsManager.updatePairFee(base, feeConfigIndex);
-    }
-
-    function batchUpdatePairStatus(PairType pairType, PairStatus status) external override {
-        LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
-        LibPairsManager.batchUpdatePairStatus(pairType, status);
     }
 
     function updatePairLeverageMargin(address base, LibPairsManager.LeverageMargin[] memory leverageMargins) external override {
