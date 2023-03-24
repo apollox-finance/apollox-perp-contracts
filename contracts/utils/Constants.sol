@@ -26,6 +26,9 @@ library Constants {
     bytes32 constant KEEPER_ROLE = keccak256("KEEPER_ROLE");
     // 0x7d867aa9d791a9a4be418f90a2f248aa2c5f1348317792a6f6412f94df9819f7
     bytes32 constant PRICE_FEEDER_ROLE = keccak256("PRICE_FEEDER_ROLE");
+    // 0x8227712ef8ad39d0f26f06731ef0df8665eb7ada7f41b1ee089adf3c238862a2
+    bytes32 constant MONITOR_ROLE = keccak256("MONITOR_ROLE");
+
 
     /*-------------------------------- Decimals --------------------------------*/
     uint8 constant public PRICE_DECIMALS = 8;
