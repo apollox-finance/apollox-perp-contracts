@@ -12,12 +12,12 @@ contract PausableFacet is Pausable, IPausable {
     }
 
     function pause() external override {
-        LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
         _pause();
     }
 
     function unpause() external override {
-        LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
         _unpause();
     }
 }
