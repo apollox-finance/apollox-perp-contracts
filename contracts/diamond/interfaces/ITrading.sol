@@ -14,6 +14,7 @@ interface ITrading {
         uint80 qty;        // 1e10
         uint64 stopLoss;   // 1e8
         uint64 takeProfit; // 1e8
+        uint128 blockNumber;
     }
 
     struct OpenTrade {
