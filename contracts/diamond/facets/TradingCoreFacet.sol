@@ -121,14 +121,14 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
                 require(
                     (shortReceiveFundingFeeUsd == 0 && longReceiveFundingFeeUsd == 0) ||
                     longReceiveFundingFeeUsd < 0 && shortReceiveFundingFeeUsd >= 0 && longReceiveFundingFeeUsd.abs() > shortReceiveFundingFeeUsd.abs(),
-                    "LibTrading: Funding fee calculation error. [LONG]"
+                    "TradingCoreFacet: Funding fee calculation error. [LONG]"
                 );
                 lpReceiveFundingFeeUsd = (longReceiveFundingFeeUsd + shortReceiveFundingFeeUsd).abs();
             } else {
                 require(
                     (shortReceiveFundingFeeUsd == 0 && longReceiveFundingFeeUsd == 0) ||
                     (shortReceiveFundingFeeUsd < 0 && longReceiveFundingFeeUsd >= 0 && shortReceiveFundingFeeUsd.abs() > longReceiveFundingFeeUsd.abs()),
-                    "LibTrading: Funding fee calculation error. [SHORT]"
+                    "TradingCoreFacet: Funding fee calculation error. [SHORT]"
                 );
                 lpReceiveFundingFeeUsd = (shortReceiveFundingFeeUsd + longReceiveFundingFeeUsd).abs();
             }
