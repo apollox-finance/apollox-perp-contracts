@@ -10,7 +10,7 @@ interface ITradingChecker {
 
     enum Refund {
         NO, SWITCH, PAIR_STATUS, AMOUNT_IN, USER_PRICE, MIN_NOTIONAL_USD, MAX_NOTIONAL_USD,
-        MAX_LEVERAGE, TP, SL, PAIR_OI, OPEN_LOST, SYSTEM
+        MAX_LEVERAGE, TP, SL, PAIR_OI, OPEN_LOST, SYSTEM, FEED_DELAY
     }
 
     function checkTp(
