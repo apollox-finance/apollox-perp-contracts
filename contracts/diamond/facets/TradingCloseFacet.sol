@@ -94,7 +94,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
             ITradingClose.SettleToken[] memory openTradeSettleTokens = _decreaseByCloseTrade(ts, tuple.ot.tokenIn, tuple.openTradeReceive.abs());
             if (tuple.lpReceive < 0) {// |openTradeReceive + lpReceive| = userReceive + closeFee
                 ITradingClose.SettleToken[] memory lpSettleTokens = IVault(address(this)).decreaseByCloseTrade(tuple.ot.tokenIn, tuple.lpReceive.abs());
-                require(openTradeSettleTokens[0].amount + lpSettleTokens[0].amount >= tuple.closeFee, "LibTrading: Target token insufficient funds");
+                require(openTradeSettleTokens[0].amount + lpSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -106,7 +106,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                     _transferToUserForClose(tuple.tradeHash, tuple.ot.user, openTradeSettleTokens);
                 }
             } else if (tuple.lpReceive == 0) {// |openTradeReceive| = userReceive + closeFee
-                require(openTradeSettleTokens[0].amount >= tuple.closeFee, "LibTrading: Target token insufficient funds");
+                require(openTradeSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -115,7 +115,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                     _transferToUserForClose(tuple.tradeHash, tuple.ot.user, openTradeSettleTokens);
                 }
             } else {// |openTradeReceive| = userReceive + closeFee + lpReceive
-                require(openTradeSettleTokens[0].amount >= tuple.closeFee, "LibTrading: Target token insufficient funds");
+                require(openTradeSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -125,7 +125,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         } else if (tuple.openTradeReceive == 0) {
             if (tuple.lpReceive < 0) {// |lpReceive| = userReceive + closeFee
                 ITradingClose.SettleToken[] memory lpSettleTokens = IVault(address(this)).decreaseByCloseTrade(tuple.ot.tokenIn, tuple.lpReceive.abs());
-                require(lpSettleTokens[0].amount >= tuple.closeFee, "LibTrading: Target token insufficient funds");
+                require(lpSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -137,7 +137,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         } else {
             if (tuple.lpReceive < 0) {// |lpReceive| = userReceive + closeFee + openTradeReceive
                 ITradingClose.SettleToken[] memory lpSettleTokens = IVault(address(this)).decreaseByCloseTrade(tuple.ot.tokenIn, tuple.lpReceive.abs());
-                require(lpSettleTokens[0].amount >= tuple.closeFee, "LibTrading: Target token insufficient funds");
+                require(lpSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -162,7 +162,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
             settleTokens[0] = st;
             return settleTokens;
         } else {
-            require(ts.openTradeTokenIns.length > 1, "LibTrading: Insufficient funds in the openTrade");
+            require(ts.openTradeTokenIns.length > 1, "TradingCloseFacet: Insufficient funds in the openTrade");
             uint256 otherTokenAmountUsd = (amount - ts.openTradeAmountIns[token]) * mt_0.price * 1e10 / (10 ** mt_0.decimals);
 
             ITrading.MarginBalance[] memory balances = new ITrading.MarginBalance[](ts.openTradeTokenIns.length - 1);
@@ -178,7 +178,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                     index = index + ONE;
                 }
             }
-            require(otherTokenAmountUsd < totalBalanceUsd, "LibTrading: Insufficient funds in the openTrade");
+            require(otherTokenAmountUsd < totalBalanceUsd, "TradingCloseFacet: Insufficient funds in the openTrade");
             settleTokens = new ITradingClose.SettleToken[]((index + ONE).into());
             settleTokens[0] = st;
             ts.openTradeAmountIns[token] = 0;
