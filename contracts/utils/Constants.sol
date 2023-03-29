@@ -40,5 +40,6 @@ library Constants {
     int256 constant public FUNDING_FEE_RATE_DIVISOR = 1e18;
     uint16 constant public MAX_DAO_SHARE_P = 5000;
     uint16 constant public MAX_COMMISSION_P = 5000;
+    uint8 constant public FEED_DELAY_BLOCK = 10;
 
 }
