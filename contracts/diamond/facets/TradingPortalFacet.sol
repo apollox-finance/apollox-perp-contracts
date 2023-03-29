@@ -18,8 +18,8 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
     using SafeERC20 for IERC20;
 
     function _check(ITrading.OpenTrade memory ot) internal view {
-        require(ot.margin > 0, "LibTrading: Trade information does not exist");
-        require(ot.user == msg.sender, "LibTrading: Can only be updated by yourself");
+        require(ot.margin > 0, "TradingPortalFacet: Trade information does not exist");
+        require(ot.user == msg.sender, "TradingPortalFacet: Can only be updated by yourself");
     }
     
     function openMarketTrade(OpenDataInput calldata data) external override {
@@ -29,7 +29,7 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
         address user = msg.sender;
         ITrading.PendingTrade memory pt = ITrading.PendingTrade(
             user, data.broker, data.isLong, data.price, data.pairBase, data.amountIn,
-            data.tokenIn, data.qty, data.stopLoss, data.takeProfit
+            data.tokenIn, data.qty, data.stopLoss, data.takeProfit, uint128(block.number)
         );
         bytes32 tradeHash = keccak256(abi.encode(pt, ts.salt, "trade", block.number, block.timestamp));
         ts.salt++;
@@ -53,7 +53,7 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
     function updateTradeSl(bytes32 tradeHash, uint64 stopLoss) public override {
         OpenTrade storage ot = LibTrading.tradingStorage().openTrades[tradeHash];
         _check(ot);
-        require(ITradingChecker(address(this)).checkSl(ot.isLong, stopLoss, ot.entryPrice), "TradingFacet: stopLoss is not in the valid range");
+        require(ITradingChecker(address(this)).checkSl(ot.isLong, stopLoss, ot.entryPrice), "TradingPortalFacet: stopLoss is not in the valid range");
 
         uint256 oldSl = ot.stopLoss;
         ot.stopLoss = stopLoss;
@@ -124,10 +124,10 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
         OpenTrade storage ot = LibTrading.tradingStorage().openTrades[tradeHash];
         _check(ot);
         ITradingConfig.TradingConfig memory tc = ITradingConfig(address(this)).getTradingConfig();
-        require(tc.userCloseTrading, "TradingFacet: This feature is temporarily disabled");
+        require(tc.userCloseTrading, "TradingPortalFacet: This feature is temporarily disabled");
         require(
             IPairsManager(address(this)).getPairForTrading(ot.pairBase).status != IPairsManager.PairStatus.CLOSE,
-            "TradingFacet: pair does not support close position"
+            "TradingPortalFacet: pair does not support close position"
         );
         IPriceFacade(address(this)).requestPrice(tradeHash, ot.pairBase, false);
     }
