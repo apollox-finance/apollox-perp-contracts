@@ -260,7 +260,7 @@ contract TradingCheckerFacet is ITradingChecker {
         uint trialPrice = ITradingCore(address(this)).slippagePrice(pairQty, pair.slippageConfig, marketPrice, data.qty, data.isLong);
         require(
             (data.isLong && trialPrice <= data.price) || (!data.isLong && trialPrice >= data.price),
-            "LibTrading: Unable to trading at a price acceptable to the user"
+            "TradingCheckerFacet: Unable to trading at a price acceptable to the user"
         );
 
         // price * qty * 10^18 / 10^(8+10) = price * qty
@@ -283,7 +283,7 @@ contract TradingCheckerFacet is ITradingChecker {
         uint leverage_10000 = notionalUsd * 1e4 / marginUsd;
         require(
             leverage_10000 <= uint(1e4) * lm.maxLeverage,
-            "LibTrading: Exceeds the maximum leverage allowed for the position"
+            "TradingCheckerFacet: Exceeds the maximum leverage allowed for the position"
         );
         require(
             checkTp(data.isLong, data.takeProfit, trialPrice, leverage_10000, tc.maxTakeProfitP),
@@ -298,18 +298,18 @@ contract TradingCheckerFacet is ITradingChecker {
             // It is prohibited to open positions with excessive losses. Avoid opening positions that are liquidated
             require(
                 (trialPrice - marketPrice) * data.qty * 1e4 < marginUsd * lm.initialLostP,
-                "LibTrading: Too much initial loss"
+                "TradingCheckerFacet: Too much initial loss"
             );
             // The total position must be less than or equal to the maximum position allowed for the trading pair
-            require(notionalUsd + pairQty.longQty * trialPrice <= pair.pairConfig.maxLongOiUsd, "LibTrading: Long positions have exceeded the maximum allowed");
+            require(notionalUsd + pairQty.longQty * trialPrice <= pair.pairConfig.maxLongOiUsd, "TradingCheckerFacet: Long positions have exceeded the maximum allowed");
         } else {
             // It is prohibited to open positions with excessive losses. Avoid opening positions that are liquidated
             require(
                 (marketPrice - trialPrice) * data.qty * 1e4 < marginUsd * lm.initialLostP,
-                "LibTrading: Too much initial loss"
+                "TradingCheckerFacet: Too much initial loss"
             );
             // The total position must be less than or equal to the maximum position allowed for the trading pair
-            require(notionalUsd + pairQty.shortQty * trialPrice <= pair.pairConfig.maxShortOiUsd, "LibTrading: Short positions have exceeded the maximum allowed");
+            require(notionalUsd + pairQty.shortQty * trialPrice <= pair.pairConfig.maxShortOiUsd, "TradingCheckerFacet: Short positions have exceeded the maximum allowed");
         }
     }
 
@@ -352,6 +352,10 @@ contract TradingCheckerFacet is ITradingChecker {
     function marketTradeCallbackCheck(
         ITrading.PendingTrade memory pt, uint256 marketPrice
     ) external view returns (bool result, uint96 openFee, uint96 executionFee, uint256 entryPrice, Refund refund) {
+        if (pt.blockNumber + Constants.FEED_DELAY_BLOCK < block.number) {
+            return (false, 0, 0, 0, Refund.FEED_DELAY);
+        }
+
         MarketTradeCallbackCheckTuple memory tuple = _buildMarketTradeCallbackCheckTuple(pt, marketPrice);
         if ((pt.isLong && tuple.entryPrice > pt.price) || (!pt.isLong && tuple.entryPrice < pt.price)) {
             return (false, 0, 0, tuple.entryPrice, Refund.USER_PRICE);
