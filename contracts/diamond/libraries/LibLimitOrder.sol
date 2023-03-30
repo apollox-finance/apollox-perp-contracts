@@ -2,11 +2,8 @@
 pragma solidity ^0.8.19;
 
 import "../interfaces/IBook.sol";
-import "../interfaces/IVault.sol";
 import "../interfaces/ITradingOpen.sol";
 import "../interfaces/ILimitOrder.sol";
-import "../interfaces/IPairsManager.sol";
-import "../interfaces/ITradingConfig.sol";
 import "../interfaces/ITradingChecker.sol";
 import "../interfaces/IOrderAndTradeHistory.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
