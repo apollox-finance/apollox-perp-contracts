@@ -68,10 +68,4 @@ interface IVault {
     function decreaseByCloseTrade(address token, uint256 amount) external returns (ITradingClose.SettleToken[] memory);
 
     function maxWithdrawAbleUsd() external view returns (int256);
-
-    //    function transferToExchangeTreasury(address[] calldata tokens, uint256[] calldata amounts) external;
-    //
-    //    function transferToExchangeTreasuryBNB(uint256 amount) external;
-    //
-    //    function receiveFromExchangeTreasury(bytes[] calldata messages, bytes[] calldata signatures) external;
 }
