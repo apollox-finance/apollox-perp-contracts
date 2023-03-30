@@ -3,7 +3,7 @@ pragma solidity ^0.8.19;
 
 import "../../utils/Constants.sol";
 import "../libraries/LibVault.sol";
-import "../libraries/LibPriceFacade.sol";
+import "../interfaces/IPriceFacade.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 library LibAlpManager {
@@ -40,6 +40,11 @@ library LibAlpManager {
 
     function alpPrice() internal view returns (uint256) {
         int256 totalValueUsd = LibVault.getTotalValueUsd();
+        (int256 lpUnPnlUsd,) = ITradingCore(address(this)).lpUnrealizedPnlUsd();
+        return _alpPrice(totalValueUsd + lpUnPnlUsd);
+    }
+
+    function _alpPrice(int256 totalValueUsd) private view returns (uint256) {
         uint256 totalSupply = IERC20(alpManagerStorage().alp).totalSupply();
         if (totalValueUsd <= 0 && totalSupply > 0) {
             return 0;
@@ -52,7 +57,8 @@ library LibAlpManager {
     }
 
     function mintAlp(address account, address tokenIn, uint256 amount) internal returns (uint256 alpAmount){
-        alpAmount = _calculateAlpAmount(tokenIn, amount);
+        LibVault.AvailableToken memory at = LibVault.vaultStorage().tokens[tokenIn];
+        alpAmount = _calculateAlpAmount(at, amount);
         LibVault.deposit(tokenIn, amount, account, false);
         _addMinted(account);
         emit MintAddLiquidity(account, tokenIn, amount);
@@ -60,68 +66,101 @@ library LibAlpManager {
 
     function mintAlpBNB(address account, uint256 amount) internal returns (uint256 alpAmount){
         address tokenIn = LibVault.WBNB();
-        alpAmount = _calculateAlpAmount(tokenIn, amount);
+        LibVault.AvailableToken memory at = LibVault.vaultStorage().tokens[tokenIn];
+        alpAmount = _calculateAlpAmount(at, amount);
         LibVault.depositBNB(amount);
         _addMinted(account);
         emit MintAddLiquidity(account, tokenIn, amount);
     }
 
-    function _calculateAlpAmount(address tokenIn, uint256 amount) private view returns (uint256 alpAmount) {
-        LibVault.AvailableToken storage at = LibVault.vaultStorage().tokens[tokenIn];
+    function _calculateAlpAmount(LibVault.AvailableToken memory at, uint256 amount) private view returns (uint256 alpAmount) {
         require(at.weight > 0, "LibAlpManager: Token does not exist");
-        uint256 tokenInPrice = LibPriceFacade.getPrice(tokenIn);
+        (int256 lpUnPnlUsd, int256 lpTokenUnPnlUsd) = ITradingCore(address(this)).lpUnrealizedPnlUsd(at.tokenAddress);
+        uint256 alpPrice_ = _alpPrice(LibVault.getTotalValueUsd() + lpUnPnlUsd);
+        require(alpPrice_ > 0, "LibAlpManager: ALP Price is not available");
+
+        (uint256 tokenInPrice,) = IPriceFacade(address(this)).getPriceFromCacheOrOracle(at.tokenAddress);
         uint256 amountUsd = tokenInPrice * amount * 1e10 / (10 ** at.decimals);
-        uint256 afterTaxAmountUsd = amountUsd * (1e4 - getMintFeePoint(at)) / 1e4;
-        uint256 _alpPrice = alpPrice();
-        require(_alpPrice > 0, "LibAlpManager: ALP Price is not available");
-        alpAmount = afterTaxAmountUsd * 1e8 / _alpPrice;
+        int256 poolTokenInUsd = int256(LibVault.vaultStorage().treasury[at.tokenAddress] * tokenInPrice * 1e10 / (10 ** at.decimals)) + lpTokenUnPnlUsd;
+        // ∵ alpPrice_ > 0
+        // ∴ (LibVault.getTotalValueUsd() + lpUnPnlUsd) > 0
+        uint256 afterTaxAmountUsd =
+        amountUsd *
+        (1e4 - _getFeePoint(at, uint256(LibVault.getTotalValueUsd() + lpUnPnlUsd), poolTokenInUsd, amountUsd, true)) /
+        1e4;
+        alpAmount = afterTaxAmountUsd * 1e8 / alpPrice_;
     }
 
     function _addMinted(address account) private {
         alpManagerStorage().lastMintedAt[account] = block.timestamp;
     }
 
-    function getMintFeePoint(LibVault.AvailableToken storage at) internal view returns (uint16) {
-        // Dynamic rates are not supported in Phase I
-        // Soon it will be supported
-        require(!at.dynamicFee, "LibAlpManager: Dynamic fee rates are not supported at this time");
-        return at.feeBasisPoints;
-    }
-
     function burnAlp(address account, address tokenOut, uint256 alpAmount, address receiver) internal returns (uint256 amountOut) {
-        amountOut = _calculateTokenAmount(account, tokenOut, alpAmount);
+        AlpManagerStorage storage ams = alpManagerStorage();
+        require(ams.lastMintedAt[account] + ams.coolingDuration <= block.timestamp, "LibAlpManager: Cooling duration not yet passed");
+        LibVault.AvailableToken memory at = LibVault.vaultStorage().tokens[tokenOut];
+        amountOut = _calculateTokenAmount(at, alpAmount);
         LibVault.withdraw(receiver, tokenOut, amountOut);
         emit BurnRemoveLiquidity(account, tokenOut, amountOut);
     }
 
     function burnAlpBNB(address account, uint256 alpAmount, address payable receiver) internal returns (uint256 amountOut) {
+        AlpManagerStorage storage ams = alpManagerStorage();
+        require(ams.lastMintedAt[account] + ams.coolingDuration <= block.timestamp, "LibAlpManager: Cooling duration not yet passed");
         address tokenOut = LibVault.WBNB();
-        amountOut = _calculateTokenAmount(account, tokenOut, alpAmount);
+        LibVault.AvailableToken memory at = LibVault.vaultStorage().tokens[tokenOut];
+        amountOut = _calculateTokenAmount(at, alpAmount);
         LibVault.withdrawBNB(receiver, amountOut);
         emit BurnRemoveLiquidity(account, tokenOut, amountOut);
     }
 
-    function _calculateTokenAmount(address account, address tokenOut, uint256 alpAmount) private view returns (uint256 amountOut) {
-        LibVault.VaultStorage storage vs = LibVault.vaultStorage();
-        LibVault.AvailableToken storage at = vs.tokens[tokenOut];
+    function _calculateTokenAmount(LibVault.AvailableToken memory at, uint256 alpAmount) private view returns (uint256 amountOut) {
         require(at.weight > 0, "LibAlpManager: Token does not exist");
-        AlpManagerStorage storage ams = alpManagerStorage();
-        require(ams.lastMintedAt[account] + ams.coolingDuration <= block.timestamp, "LibAlpManager: Cooling duration not yet passed");
-        uint256 tokenOutPrice = LibPriceFacade.getPrice(tokenOut);
-        uint256 _alpPrice = alpPrice();
-        require(_alpPrice > 0, "LibAlpManager: ALP Price is not available");
-        uint256 amountOutUsd = _alpPrice * alpAmount / 1e8;
-        uint256 afterTaxAmountOutUsd = amountOutUsd * (1e4 - getBurnFeePoint(at)) / 1e4;
-
-        require(int256(afterTaxAmountOutUsd) <= LibVault.maxWithdrawAbleUsd(), "LibAlpManager: tokenOut balance is insufficient");
-        amountOut = afterTaxAmountOutUsd * (10 ** at.decimals) / (tokenOutPrice * 1e10);
-        require(amountOut < vs.treasury[tokenOut], "LibAlpManager: tokenOut balance is insufficient");
+        (int256 lpUnPnlUsd, int256 lpTokenUnPnlUsd) = ITradingCore(address(this)).lpUnrealizedPnlUsd(at.tokenAddress);
+        int256 totalValueUsd = LibVault.getTotalValueUsd() + lpUnPnlUsd;
+        uint256 alpPrice_ = _alpPrice(totalValueUsd);
+        require(alpPrice_ > 0, "LibAlpManager: ALP Price is not available");
+        (uint256 tokenOutPrice,) = IPriceFacade(address(this)).getPriceFromCacheOrOracle(at.tokenAddress);
+        int256 poolTokenOutUsd = int256(LibVault.vaultStorage().treasury[at.tokenAddress] * tokenOutPrice * 1e10 / (10 ** at.decimals)) + lpTokenUnPnlUsd;
+        uint256 amountOutUsd = alpPrice_ * alpAmount / 1e8;
+        // It is not allowed for the value of any token in the LP to become negative after burning.
+        require(poolTokenOutUsd >= int256(amountOutUsd), "LibAlpManager: tokenOut balance is insufficient");
+        // ∵ alpPrice_ > 0
+        // ∴ (LibVault.getTotalValueUsd() + lpUnPnlUsd) > 0
+        uint256 afterTaxAmountOutUsd = amountOutUsd * (1e4 - _getFeePoint(at, uint256(totalValueUsd), poolTokenOutUsd, amountOutUsd, false)) / 1e4;
+        require(int256(afterTaxAmountOutUsd) <= LibVault.maxWithdrawAbleUsd(totalValueUsd), "LibAlpManager: tokenOut balance is insufficient");
+        return afterTaxAmountOutUsd * (10 ** at.decimals) / (tokenOutPrice * 1e10);
     }
 
-    function getBurnFeePoint(LibVault.AvailableToken storage at) internal view returns (uint16) {
-        // Dynamic rates are not supported in Phase I
-        // Soon it will be supported
-        require(!at.dynamicFee, "LibAlpManager: Dynamic fee rates are not supported at this time");
-        return at.taxBasisPoints;
+    function _getFeePoint(
+        LibVault.AvailableToken memory at, uint256 totalValueUsd,
+        int256 poolTokenUsd, uint256 amountUsd, bool increase
+    ) private pure returns (uint256) {
+        if (!at.dynamicFee) {
+            return increase ? at.feeBasisPoints : at.taxBasisPoints;
+        }
+        uint256 targetValueUsd = totalValueUsd * at.weight / 1e4;
+        int256 nextValueUsd = poolTokenUsd + int256(amountUsd);
+        if (!increase) {
+            // ∵ poolTokenUsd >= amountUsd && amountUsd > 0
+            // ∴ poolTokenUsd > 0
+            nextValueUsd = poolTokenUsd - int256(amountUsd);
+        }
+
+        uint256 initDiff = poolTokenUsd > int256(targetValueUsd)
+        ? uint256(poolTokenUsd) - targetValueUsd  // ∵ (poolTokenUsd > targetValueUsd && targetValueUsd > 0) ∴ (poolTokenUsd > 0)
+        : uint256(int256(targetValueUsd) - poolTokenUsd);
+
+        uint256 nextDiff = nextValueUsd > int256(targetValueUsd)
+        ? uint256(nextValueUsd) - targetValueUsd
+        : uint256(int256(targetValueUsd) - nextValueUsd);
+
+        if (nextDiff < initDiff) {
+            uint256 feeAdjust = at.taxBasisPoints * initDiff / targetValueUsd;
+            return at.feeBasisPoints > feeAdjust ? at.feeBasisPoints - feeAdjust : 0;
+        }
+
+        uint256 avgDiff = (initDiff + nextDiff) / 2;
+        return at.feeBasisPoints + (avgDiff > targetValueUsd ? at.taxBasisPoints : (at.taxBasisPoints * avgDiff) / targetValueUsd);
     }
 }
