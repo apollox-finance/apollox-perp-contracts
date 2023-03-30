@@ -265,15 +265,15 @@ library LibVault {
             uint256 valueUsd = price * balance * 1e10 / (10 ** at.decimals);
             totalValueUsd += valueUsd;
         }
-        return int256(totalValueUsd) + ITradingCore(address(this)).lpUnrealizedPnlUsd();
+        return int256(totalValueUsd);
     }
 
     function getTokenByAddress(address tokenAddress) internal view returns (AvailableToken memory) {
         return LibVault.vaultStorage().tokens[tokenAddress];
     }
 
-    function maxWithdrawAbleUsd() internal view returns (int256) {
+    function maxWithdrawAbleUsd(int256 totalValueUsd) internal view returns (int256) {
         LibVault.VaultStorage storage vs = vaultStorage();
-        return getTotalValueUsd() - int256(ITradingCore(address(this)).lpNotionalUsd() * vs.securityMarginP / 1e4);
+        return totalValueUsd - int256(ITradingCore(address(this)).lpNotionalUsd() * vs.securityMarginP / 1e4);
     }
 }
