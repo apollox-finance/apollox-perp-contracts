@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import "../security/OnlySelf.sol";
 import "../../utils/Constants.sol";
 import "../interfaces/IVault.sol";
+import "../interfaces/ITradingCore.sol";
 import "../libraries/LibVault.sol";
 import "../libraries/LibPriceFacade.sol";
 import "../libraries/LibAccessControlEnumerable.sol";
@@ -122,73 +123,8 @@ contract VaultFacet is IVault, OnlySelf {
         return LibVault.decreaseByCloseTrade(token, amount);
     }
 
-
     function maxWithdrawAbleUsd() external view returns (int256) {
-        return LibVault.maxWithdrawAbleUsd();
+        (int256 lpUnPnlUsd,) = ITradingCore(address(this)).lpUnrealizedPnlUsd();
+        return LibVault.maxWithdrawAbleUsd(LibVault.getTotalValueUsd() + lpUnPnlUsd);
     }
-
-    //    function transferToExchangeTreasury(address[] calldata tokens_, uint256[] calldata amounts) external override {
-    //        LibAccessControlEnumerable.checkRole(BALANCE_FUNDS_ROLE);
-    //        require(tokens_.length == amounts.length, "VaultFacet: Parameter error");
-    //        LibVault.VaultStorage storage vs = LibVault.vaultStorage();
-    //        for (uint256 i; i < tokens_.length;) {
-    //            LibVault.AvailableToken storage at = vs.tokens[tokens_[i]];
-    //            _transferToExchangeTreasury(at, amounts[i]);
-    //            unchecked {
-    //                i++;
-    //            }
-    //        }
-    //        emit TransferToExchangeTreasury(tokens_, amounts);
-    //    }
-
-    //    function _transferToExchangeTreasury(LibVault.AvailableToken storage at, uint256 amount) private {
-    //        require(amount > 0, "VaultFacet: Amount must be greater than 0");
-    //        require(at.weight > 0, "VaultFacet: Token does not exist");
-    //        LibVault.withdraw(LibVault.exchangeTreasury(), at.tokenAddress, amount);
-    //    }
-
-    //    function transferToExchangeTreasuryBNB(uint256 amount) external override {
-    //        LibAccessControlEnumerable.checkRole(BALANCE_FUNDS_ROLE);
-    //        require(amount > 0, "VaultFacet: Amount must be greater than 0");
-    //        LibVault.VaultStorage storage vs = LibVault.vaultStorage();
-    //        LibVault.AvailableToken storage at = vs.tokens[LibVault.WBNB()];
-    //        require(at.weight > 0, "VaultFacet: Token does not exist");
-    //        LibVault.withdrawBNB(payable(LibVault.exchangeTreasury()), amount);
-    //        emit TransferToExchangeTreasuryBNB(amount);
-    //    }
-
-    //    function receiveFromExchangeTreasury(bytes[] calldata messages, bytes[] calldata signatures) external override {
-    //        LibAccessControlEnumerable.checkRole(BALANCE_FUNDS_ROLE);
-    //        require(messages.length > 0 && messages.length == signatures.length, "VaultFacet: Parameter error");
-    //        address[] memory tokens_ = new address[](messages.length);
-    //        uint256[] memory amounts = new uint256[](messages.length);
-    //        for (uint256 i; i < messages.length;) {
-    //            (address token, uint256 amount) = _receiveFromExchangeTreasury(messages[i], signatures[i]);
-    //            tokens_[i] = token;
-    //            amounts[i] = amount;
-    //            unchecked {
-    //                i++;
-    //            }
-    //        }
-    //        emit ReceiveFromExchangeTreasury(tokens_, amounts);
-    //    }
-
-    //    function _receiveFromExchangeTreasury(bytes calldata message, bytes calldata signature) private returns (address, uint256) {
-    //        (, address payable to, bool isBNB, address token, uint256 amount,) = abi.decode(message, (uint256, address, bool, address, uint256, uint256));
-    //        require(to == address(this), "VaultFacet: Incorrect receiving address");
-    //        require(amount > 0, "VaultFacet: Amount must be greater than 0");
-    //        if (isBNB) {
-    //            token = LibVault.WBNB();
-    //        }
-    //        LibVault.AvailableToken storage at = LibVault.vaultStorage().tokens[token];
-    //        require(at.weight > 0, "VaultFacet: Token does not exist");
-    //        IExchangeTreasury(LibVault.exchangeTreasury()).claim(message, signature);
-    //        if (isBNB) {
-    //            LibVault.depositBNB(amount);
-    //        } else {
-    //            LibVault.deposit(token, amount);
-    //        }
-    //        return (token, amount);
-    //    }
-
 }
