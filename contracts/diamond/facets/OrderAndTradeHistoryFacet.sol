@@ -51,6 +51,11 @@ contract OrderAndTradeHistoryFacet is IOrderAndTradeHistory, OnlySelf {
         _saveActionInfo(hs, hs.orderInfos[tradeHash].user, tradeHash, aType);
     }
 
+    function updateMargin(bytes32 tradeHash, uint96 newMargin) external onlySelf override {
+        TradeInfo storage trade = LibOrderAndTradeHistory.historyStorage().tradeInfos[tradeHash];
+        trade.margin = newMargin;
+    }
+
     function getOrderAndTradeHistory(
         address user, uint start, uint8 size
     ) external view override returns (OrderAndTradeHistory[] memory datas) {
