@@ -230,7 +230,7 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         return (totalUsd, totalUsd * int256(tokenMarginUsd) / int256(totalMarginUsd));
     }
 
-    function _lpUnrealizedPnlUsd() public view returns (int256 unrealizedPnlUsd) {
+    function _lpUnrealizedPnlUsd() private view returns (int256 unrealizedPnlUsd) {
         LibTradingCore.TradingCoreStorage storage tcs = LibTradingCore.tradingCoreStorage();
         address[] memory hasPositionPairs = tcs.hasPositionPairs;
         for (UC i = ZERO; i < uc(hasPositionPairs.length); i = i + ONE) {
@@ -252,7 +252,7 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
     function _tokenMarginPct() private view returns (MarginPct[] memory marginPct) {
         LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
 
-        ITrading.MarginBalance[] memory balances = new ITrading.MarginBalance[](ts.openTradeTokenIns.length - 1);
+        ITrading.MarginBalance[] memory balances = new ITrading.MarginBalance[](ts.openTradeTokenIns.length);
         uint256 totalMarginUsd;
         UC index = ZERO;
         for (UC i = ZERO; i < uc(ts.openTradeTokenIns.length); i = i + ONE) {
