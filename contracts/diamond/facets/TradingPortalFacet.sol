@@ -137,11 +137,11 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
         LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
         OpenTrade storage ot = ts.openTrades[tradeHash];
         _check(ot);
-        IERC20(ot.tokenIn).safeTransferFrom(msg.sender, address(this), amount);
         uint96 beforeMargin = ot.margin;
         ot.margin += amount;
         ts.openTradeAmountIns[ot.tokenIn] += amount;
         IOrderAndTradeHistory(address(this)).updateMargin(tradeHash, ot.margin);
+        IERC20(ot.tokenIn).safeTransferFrom(msg.sender, address(this), amount);
         emit UpdateMargin(msg.sender, tradeHash, beforeMargin, ot.margin);
     }
 }
