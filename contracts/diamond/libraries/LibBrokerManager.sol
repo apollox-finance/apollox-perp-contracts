@@ -78,8 +78,8 @@ library LibBrokerManager {
         emit AddBroker(id, b);
     }
 
-    function _checkBrokerExist(BrokerManagerStorage storage bms, uint24 id) private view returns (Broker memory) {
-        Broker memory b = bms.brokers[id];
+    function _checkBrokerExist(BrokerManagerStorage storage bms, uint24 id) private view returns (Broker storage) {
+        Broker storage b = bms.brokers[id];
         require(b.receiver != address(0), "LibBrokerManager: broker does not exist");
         return b;
     }
@@ -103,7 +103,7 @@ library LibBrokerManager {
 
     function updateBrokerCommissionP(uint24 id, uint16 commissionP) internal {
         BrokerManagerStorage storage bms = brokerManagerStorage();
-        Broker memory b = _checkBrokerExist(bms, id);
+        Broker storage b = _checkBrokerExist(bms, id);
         uint16 oldCommissionP = b.commissionP;
         b.commissionP = commissionP;
         emit UpdateBrokerCommissionP(id, oldCommissionP, commissionP);
@@ -111,7 +111,7 @@ library LibBrokerManager {
 
     function updateBrokerReceiver(uint24 id, address receiver) internal {
         BrokerManagerStorage storage bms = brokerManagerStorage();
-        Broker memory b = _checkBrokerExist(bms, id);
+        Broker storage b = _checkBrokerExist(bms, id);
         address oldReceiver = b.receiver;
         b.receiver = receiver;
         emit UpdateBrokerReceiver(id, oldReceiver, receiver);
@@ -119,7 +119,7 @@ library LibBrokerManager {
 
     function updateBrokerName(uint24 id, string calldata name) internal {
         BrokerManagerStorage storage bms = brokerManagerStorage();
-        Broker memory b = _checkBrokerExist(bms, id);
+        Broker storage b = _checkBrokerExist(bms, id);
         string memory oldName = b.name;
         b.name = name;
         emit UpdateBrokerName(id, oldName, name);
@@ -127,7 +127,7 @@ library LibBrokerManager {
 
     function updateBrokerUrl(uint24 id, string calldata url) internal {
         BrokerManagerStorage storage bms = brokerManagerStorage();
-        Broker memory b = _checkBrokerExist(bms, id);
+        Broker storage b = _checkBrokerExist(bms, id);
         string memory oldUrl = b.url;
         b.url = url;
         emit UpdateBrokerUrl(id, oldUrl, url);
@@ -135,7 +135,7 @@ library LibBrokerManager {
 
     function withdrawCommission(uint24 id) internal {
         BrokerManagerStorage storage bms = brokerManagerStorage();
-        Broker memory b = _checkBrokerExist(bms, id);
+        Broker storage b = _checkBrokerExist(bms, id);
         address operator = msg.sender;
         address[] memory tokens = bms.brokerCommissionTokens[id];
         for (UC i = ZERO; i < uc(tokens.length); i = i + ONE) {
