@@ -3,6 +3,8 @@ pragma solidity ^0.8.19;
 
 import "../../utils/Constants.sol";
 import "../interfaces/ILimitOrder.sol";
+import "../interfaces/IPriceFacade.sol";
+import "../interfaces/IPairsManager.sol";
 import "../interfaces/ITradingChecker.sol";
 import "../libraries/LibLimitOrder.sol";
 import "../libraries/LibAccessControlEnumerable.sol";
@@ -69,7 +71,7 @@ contract LimitOrderFacet is ILimitOrder {
     function getLimitOrderByHash(bytes32 orderHash) public view override returns (LimitOrderView memory) {
         LimitOrder memory o = LibLimitOrder.limitOrderStorage().limitOrders[orderHash];
         return LimitOrderView(
-            orderHash, LibPairsManager.pairsManagerStorage().pairs[o.pairBase].name, o.pairBase, o.isLong,
+            orderHash, IPairsManager(address(this)).getPairByBase(o.pairBase).name, o.pairBase, o.isLong,
             o.tokenIn, o.amountIn, o.qty, o.limitPrice, o.stopLoss, o.takeProfit, o.broker, o.timestamp
         );
     }
