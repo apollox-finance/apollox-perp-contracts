@@ -48,8 +48,8 @@ library LibFeeManager {
     );
     event SetDaoRepurchase(address indexed oldDaoRepurchase, address daoRepurchase);
     event SetDaoShareP(uint16 oldDaoShareP, uint16 daoShareP);
-    event OpenFeeAddLiquidity(address indexed token, uint256 amount);
-    event CloseFeeAddLiquidity(address indexed token, uint256 amount);
+    event OpenFee(address indexed token, uint256 totalFee, uint256 daoAmount, uint24 brokerId, uint256 brokerAmount);
+    event CloseFee(address indexed token, uint256 totalFee, uint256 daoAmount, uint24 brokerId, uint256 brokerAmount);
 
     function initialize(address daoRepurchase, uint16 daoShareP) internal {
         FeeManagerStorage storage fms = feeManagerStorage();
@@ -127,7 +127,7 @@ library LibFeeManager {
 
         uint256 lpAmount = feeAmount - daoShare - commission;
         LibVault.deposit(token, lpAmount);
-        emit OpenFeeAddLiquidity(token, lpAmount);
+        emit OpenFee(token, feeAmount, daoShare, brokerId, commission);
         return brokerId;
     }
 
@@ -141,11 +141,11 @@ library LibFeeManager {
             detail.total += feeAmount;
             detail.daoAmount += daoShare;
         }
-        (uint256 commission,) = LibBrokerManager.updateBrokerCommission(token, feeAmount, broker);
+        (uint256 commission, uint24 brokerId) = LibBrokerManager.updateBrokerCommission(token, feeAmount, broker);
         detail.brokerAmount += commission;
 
         uint256 lpAmount = feeAmount - daoShare - commission;
         LibVault.deposit(token, lpAmount);
-        emit CloseFeeAddLiquidity(token, lpAmount);
+        emit CloseFee(token, feeAmount, daoShare, brokerId, commission);
     }
 }
