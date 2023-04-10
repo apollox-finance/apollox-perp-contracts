@@ -44,10 +44,10 @@ contract VaultFacet is IVault, OnlySelf {
         LibVault.updateToken(tokenAddress, feeBasisPoints, taxBasisPoints, dynamicFee);
     }
 
-    function updateAsMagin(address tokenAddress, bool asMagin) external override {
+    function updateAsMargin(address tokenAddress, bool asMargin) external override {
         LibAccessControlEnumerable.checkRole(Constants.TOKEN_OPERATOR_ROLE);
         require(tokenAddress != address(0), "VaultFacet: Token address can't be 0 address");
-        LibVault.updateAsMagin(tokenAddress, asMagin);
+        LibVault.updateAsMargin(tokenAddress, asMargin);
     }
 
     function changeWeight(uint16[] memory weights) external override {
