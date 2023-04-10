@@ -31,8 +31,7 @@ library LibAlpManager {
         AlpManagerStorage storage ams = alpManagerStorage();
         require(ams.alp == address(0), "LibAlpManager: Already initialized");
         ams.alp = alpToken;
-        // default 30 minutes
-        ams.coolingDuration = 1800;
+        ams.coolingDuration = 30 minutes;
     }
 
     event MintAddLiquidity(address indexed account, address indexed token, uint256 amount);
