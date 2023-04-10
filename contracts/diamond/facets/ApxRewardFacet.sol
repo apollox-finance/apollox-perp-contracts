@@ -11,8 +11,7 @@ contract ApxRewardFacet is IApxReward {
 
     function initializeApxRewardFacet(address _rewardsToken, uint256 _apxPerBlock, uint256 _startBlock) external {
         require(_rewardsToken != address(0), "Invalid _rewardsToken");
-        require(_apxPerBlock >= 0, "Invalid _apxPerBlock");
-        require(_startBlock >= 0, "Invalid _startBlock");
+        require(_apxPerBlock > 0, "apxPerBlock greater than 0");
 
         LibAccessControlEnumerable.checkRole(Constants.DEPLOYER_ROLE);
         LibApxReward.initialize(_rewardsToken, _apxPerBlock, _startBlock);
