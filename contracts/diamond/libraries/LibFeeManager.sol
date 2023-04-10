@@ -17,8 +17,8 @@ library LibFeeManager {
     struct FeeConfig {
         string name;
         uint16 index;
-        uint16 openFeeP;     //  %
-        uint16 closeFeeP;    //  %
+        uint16 openFeeP;     //  1e4
+        uint16 closeFeeP;    //  1e4
         bool enable;
     }
 
@@ -30,7 +30,7 @@ library LibFeeManager {
         // USDT/BUSD/.../ => FeeDetail
         mapping(address => IFeeManager.FeeDetail) feeDetails;
         address daoRepurchase;
-        uint16 daoShareP;       // %
+        uint16 daoShareP;       // 1e4
     }
 
     function feeManagerStorage() internal pure returns (FeeManagerStorage storage fms) {
