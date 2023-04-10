@@ -45,7 +45,7 @@ interface IVault {
 
     function updateToken(address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool dynamicFee) external;
 
-    function updateAsMagin(address tokenAddress, bool asMagin) external;
+    function updateAsMargin(address tokenAddress, bool asMargin) external;
 
     function changeWeight(uint16[] memory weights) external;
 
