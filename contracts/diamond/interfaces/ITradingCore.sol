@@ -34,7 +34,7 @@ interface ITradingCore {
 
     struct MarginPct {
         address token;
-        uint256 pct;   // %
+        uint256 pct;   // 1e4
     }
 
     function getPairQty(address pairBase) external view returns (PairQty memory);
