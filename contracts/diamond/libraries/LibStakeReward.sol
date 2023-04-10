@@ -3,12 +3,10 @@ pragma solidity ^0.8.19;
 
 import "../libraries/LibApxReward.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 library LibStakeReward {
 
-    using SafeMath for uint;
     using SafeERC20 for IERC20;
 
     bytes32 constant STAKE_REWARD_POSITION = keccak256("apollox.stake.reward.storage.v2");
@@ -61,8 +59,8 @@ library LibStakeReward {
 
         StakeRewardStorage storage st = stakeRewardStorage();
         st.stakingToken.safeTransferFrom(address(msg.sender), address(this), _amount);
-        st.userStaked[msg.sender] = st.userStaked[msg.sender].add(_amount);
-        st.totalStaked = st.totalStaked.add(_amount);
+        st.userStaked[msg.sender] += _amount;
+        st.totalStaked += _amount;
         LibApxReward.stake(_amount);
         emit Stake(msg.sender, _amount);
     }
@@ -71,10 +69,9 @@ library LibStakeReward {
         require(_amount > 0, "Invalid withdraw amount");
 
         StakeRewardStorage storage st = stakeRewardStorage();
-        uint256 old = st.userStaked[msg.sender];
-        require(old >= _amount, "Insufficient balance");
-        st.userStaked[msg.sender] = old.sub(_amount);
-        st.totalStaked = st.totalStaked.sub(_amount);
+        require(st.userStaked[msg.sender] >= _amount, "Insufficient balance");
+        st.userStaked[msg.sender] -= _amount;
+        st.totalStaked -= _amount;
         LibApxReward.unStake(_amount);
         st.stakingToken.safeTransfer(address(msg.sender), _amount);
 
