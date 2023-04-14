@@ -125,6 +125,9 @@ library LibPairsManager {
         PairsManagerStorage storage pms = pairsManagerStorage();
         SlippageConfig storage config = pms.slippageConfigs[index];
         require(!config.enable, "LibPairsManager: Configuration already exists");
+        if (slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
+            require(onePercentDepthAboveUsd > 0 && onePercentDepthBelowUsd > 0, "LibPairsManager: Invalid dynamic slippage parameter configuration");
+        }        
         config.index = index;
         config.name = name;
         config.enable = true;
@@ -150,6 +153,9 @@ library LibPairsManager {
         PairsManagerStorage storage pms = pairsManagerStorage();
         SlippageConfig storage config = pms.slippageConfigs[sc.index];
         require(config.enable, "LibPairsManager: Configuration not enabled");
+        if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
+            require(sc.onePercentDepthAboveUsd > 0 && sc.onePercentDepthBelowUsd > 0, "LibPairsManager: Invalid dynamic slippage parameter configuration");
+        }
 
         config.slippageType = sc.slippageType;
         config.onePercentDepthAboveUsd = sc.onePercentDepthAboveUsd;
