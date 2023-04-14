@@ -7,10 +7,10 @@ import "./ITradingChecker.sol";
 interface ILimitOrder is IBook {
 
     event OpenLimitOrder(address indexed user, bytes32 indexed orderHash, OpenDataInput data);
-    event UpdateOrderTp(address indexed user, bytes32 indexed tradeHash, uint256 oldTp, uint256 tp);
-    event UpdateOrderSl(address indexed user, bytes32 indexed tradeHash, uint256 oldSl, uint256 sl);
-    event ExecuteLimitOrderRejected(address indexed user, bytes32 indexed tradeHash, ITradingChecker.Refund refund);
-    event LimitOrderRefund(address indexed user, bytes32 indexed tradeHash, ITradingChecker.Refund refund);
+    event UpdateOrderTp(address indexed user, bytes32 indexed orderHash, uint256 oldTp, uint256 tp);
+    event UpdateOrderSl(address indexed user, bytes32 indexed orderHash, uint256 oldSl, uint256 sl);
+    event ExecuteLimitOrderRejected(address indexed user, bytes32 indexed orderHash, ITradingChecker.Refund refund);
+    event LimitOrderRefund(address indexed user, bytes32 indexed orderHash, ITradingChecker.Refund refund);
     event CancelLimitOrder(address indexed user, bytes32 indexed orderHash);
     event ExecuteLimitOrderSuccessful(address indexed user, bytes32 indexed orderHash);
 
