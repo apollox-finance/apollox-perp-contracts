@@ -13,8 +13,8 @@
   "license": "ISC",
   "dependencies": {
     "@chainlink/contracts": "^0.6.1",
-    "@openzeppelin/contracts": "^4.8.2",
-    "@openzeppelin/contracts-upgradeable": "^4.8.2",
+    "@openzeppelin/contracts": "^4.8.3",
+    "@openzeppelin/contracts-upgradeable": "^4.8.3",
     "@openzeppelin/truffle-upgrades": "^1.17.0",
     "shelljs": "^0.8.5",
     "truffle-contract-size": "^2.0.1",
