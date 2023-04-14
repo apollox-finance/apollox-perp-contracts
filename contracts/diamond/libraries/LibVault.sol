@@ -80,7 +80,7 @@ library LibVault {
     ) internal {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
-        require(at.weight == 0, "LibVault: Can't add token that already exists");
+        require(at.tokenAddress == address(0), "LibVault: Can't add token that already exists");
         if (dynamicFee && taxBasisPoints <= feeBasisPoints) {
             revert("LibVault: TaxBasisPoints must be greater than feeBasisPoints at dynamic rates");
         }
@@ -101,7 +101,7 @@ library LibVault {
     function removeToken(address tokenAddress, uint16[] memory weights) internal {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
-        require(at.weight > 0, "LibVault: Token does not exist");
+        require(at.tokenAddress != address(0), "LibVault: Token does not exist");
 
         changeWeight(weights);
         uint256 lastPosition = vs.tokenAddresses.length - 1;
@@ -120,7 +120,7 @@ library LibVault {
     function updateToken(address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool dynamicFee) internal {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
-        require(at.weight > 0, "LibVault: Token does not exist");
+        require(at.tokenAddress != address(0), "LibVault: Token does not exist");
         if (dynamicFee && taxBasisPoints <= feeBasisPoints) {
             revert("LibVault: TaxBasisPoints must be greater than feeBasisPoints at dynamic rates");
         }
@@ -133,7 +133,7 @@ library LibVault {
 
     function updateAsMargin(address tokenAddress, bool asMargin) internal {
         AvailableToken storage at = vaultStorage().tokens[tokenAddress];
-        require(at.weight > 0, "LibVault: Token does not exist");
+        require(at.tokenAddress != address(0), "LibVault: Token does not exist");
         require(at.asMargin != asMargin, "LibVault: No modification required");
         at.asMargin = asMargin;
         emit SupportTokenAsMargin(tokenAddress, asMargin);
