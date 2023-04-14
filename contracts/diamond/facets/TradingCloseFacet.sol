@@ -344,7 +344,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
     ) private {
         uint256 _closeFee = _settleForLiqTrade(ts, ot, tradeHash, pnl, fundingFee, closeFee);
 
-        IOrderAndTradeHistory.CloseInfo memory closeInfo = IOrderAndTradeHistory.CloseInfo(uint64(liqPrice), int96(fundingFee), uint96(_closeFee), 0);
+        IOrderAndTradeHistory.CloseInfo memory closeInfo = IOrderAndTradeHistory.CloseInfo(uint64(liqPrice), int96(fundingFee), uint96(_closeFee), int96(pnl));
         _saveCloseTradeHistory(tradeHash, closeInfo, IOrderAndTradeHistory.ActionType.LIQUIDATED);
         emit ExecuteCloseSuccessful(ot.user, tradeHash, ExecutionType.LIQ, closeInfo);
         _removeOpenTrade(ts, ot, tradeHash);
