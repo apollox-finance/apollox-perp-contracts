@@ -386,7 +386,7 @@ contract TradingCheckerFacet is ITradingChecker {
         }
 
         if (!checkTp(pt.isLong, pt.takeProfit, tuple.entryPrice, leverage_10000, tuple.tc.maxTakeProfitP)) {
-            return (false, 0, 0, entryPrice, Refund.TP);
+            return (false, 0, 0, tuple.entryPrice, Refund.TP);
         }
 
         if (!checkSl(pt.isLong, pt.stopLoss, tuple.entryPrice)) {
