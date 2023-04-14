@@ -19,7 +19,7 @@
     "shelljs": "^0.8.5",
     "truffle-contract-size": "^2.0.1",
     "truffle-plugin-verify": "^0.6.2",
-    "unchecked-counter": "^1.0.0",
+    "unchecked-counter": "1.0.0",
     "web3": "^1.8.2"
   },
   "devDependencies": {
