@@ -178,7 +178,7 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
                 if (ppi.longQty == qty) {
                     ppi.lpShortAvgPrice = 0;
                 } else {
-                    ppi.lpShortAvgPrice = uint64((ppi.lpShortAvgPrice * ppi.longQty - userPrice * qty) / (ppi.longQty - qty));
+                    ppi.lpShortAvgPrice = uint64((ppi.lpShortAvgPrice * ppi.longQty - userPrice * qty) / (ppi.longQty - qty));                    
                 }
                 ppi.longQty -= qty;
             } else {
