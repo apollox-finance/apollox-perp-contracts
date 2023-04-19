@@ -73,7 +73,7 @@ library LibAlpManager {
     }
 
     function _calculateAlpAmount(LibVault.AvailableToken memory at, uint256 amount) private view returns (uint256 alpAmount) {
-        require(at.weight > 0, "LibAlpManager: Token does not exist");
+        require(at.tokenAddress != address(0), "LibAlpManager: Token does not exist");
         (int256 lpUnPnlUsd, int256 lpTokenUnPnlUsd) = ITradingCore(address(this)).lpUnrealizedPnlUsd(at.tokenAddress);
         uint256 alpPrice_ = _alpPrice(LibVault.getTotalValueUsd() + lpUnPnlUsd);
         require(alpPrice_ > 0, "LibAlpManager: ALP Price is not available");
@@ -114,7 +114,7 @@ library LibAlpManager {
     }
 
     function _calculateTokenAmount(LibVault.AvailableToken memory at, uint256 alpAmount) private view returns (uint256 amountOut) {
-        require(at.weight > 0, "LibAlpManager: Token does not exist");
+        require(at.tokenAddress != address(0), "LibAlpManager: Token does not exist");
         (int256 lpUnPnlUsd, int256 lpTokenUnPnlUsd) = ITradingCore(address(this)).lpUnrealizedPnlUsd(at.tokenAddress);
         int256 totalValueUsd = LibVault.getTotalValueUsd() + lpUnPnlUsd;
         uint256 alpPrice_ = _alpPrice(totalValueUsd);
