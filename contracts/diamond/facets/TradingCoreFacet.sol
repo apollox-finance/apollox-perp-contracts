@@ -5,6 +5,7 @@ import "../security/OnlySelf.sol";
 import "../interfaces/ITradingCore.sol";
 import "../interfaces/IPairsManager.sol";
 import "../interfaces/ITradingPortal.sol";
+import "../libraries/LibTrading.sol";
 import "../libraries/LibTradingCore.sol";
 import "../libraries/LibAccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/math/SignedMath.sol";
@@ -203,7 +204,37 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         }
     }
 
-    function lpUnrealizedPnlUsd() external view override returns (int256 unrealizedPnlUsd) {
+    function lpUnrealizedPnlUsd() external view override returns (int256 totalUsd, LpMarginTokenUnPnl[] memory tokenUnPnlUsd) {
+        totalUsd = _lpUnrealizedPnlUsd();
+        MarginPct[] memory marginPct = _tokenMarginPct();
+        tokenUnPnlUsd = new LpMarginTokenUnPnl[](marginPct.length);
+        for (UC i = ZERO; i < uc(marginPct.length); i = i + ONE) {
+            MarginPct memory mp = marginPct[i.into()];
+            tokenUnPnlUsd[i.into()] = LpMarginTokenUnPnl(mp.token, totalUsd * int256(mp.pct) / int256(1e4));
+        }
+        return (totalUsd, tokenUnPnlUsd);
+    }
+
+    function lpUnrealizedPnlUsd(address targetToken) external view override returns (int256 totalUsd, int256 tokenUsd) {
+        LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
+        totalUsd = _lpUnrealizedPnlUsd();
+        uint256 totalMarginUsd;
+        uint256 tokenMarginUsd;
+        for (UC i = ZERO; i < uc(ts.openTradeTokenIns.length); i = i + ONE) {
+            address token = ts.openTradeTokenIns[i.into()];
+            if (ts.openTradeAmountIns[token] > 0) {
+                IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(token);
+                uint marginUsd = mt.price * ts.openTradeAmountIns[token] * 1e10 / (10 ** mt.decimals);
+                totalMarginUsd += marginUsd;
+                if (token == targetToken) {
+                    tokenMarginUsd = marginUsd;
+                }
+            }
+        }
+        return (totalUsd, totalUsd * int256(tokenMarginUsd) / int256(totalMarginUsd));
+    }
+
+    function _lpUnrealizedPnlUsd() private view returns (int256 unrealizedPnlUsd) {
         LibTradingCore.TradingCoreStorage storage tcs = LibTradingCore.tradingCoreStorage();
         address[] memory hasPositionPairs = tcs.hasPositionPairs;
         for (UC i = ZERO; i < uc(hasPositionPairs.length); i = i + ONE) {
@@ -220,6 +251,35 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
             }
         }
         return unrealizedPnlUsd;
+    }
+
+    function _tokenMarginPct() private view returns (MarginPct[] memory marginPct) {
+        LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
+
+        ITrading.MarginBalance[] memory balances = new ITrading.MarginBalance[](ts.openTradeTokenIns.length);
+        uint256 totalMarginUsd;
+        UC index = ZERO;
+        for (UC i = ZERO; i < uc(ts.openTradeTokenIns.length); i = i + ONE) {
+            address token = ts.openTradeTokenIns[i.into()];
+            if (ts.openTradeAmountIns[token] > 0) {
+                IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(token);
+                uint marginUsd = mt.price * ts.openTradeAmountIns[token] * 1e10 / (10 ** mt.decimals);
+                balances[index.into()] = ITrading.MarginBalance(token, mt.price, mt.decimals, marginUsd);
+                totalMarginUsd += marginUsd;
+                index = index + ONE;
+            }
+        }
+        marginPct = new MarginPct[](index.into());
+        uint256 points = 1e4;
+        for (UC i = ONE; i < index; i = i + ONE) {
+            // tokenMarginUsd * 1e4 / totalMarginUsd;
+            ITrading.MarginBalance memory mb = balances[i.into()];
+            uint256 share = mb.balanceUsd * 1e4 / totalMarginUsd;
+            marginPct[i.into()] = MarginPct(mb.token, share);
+            points -= share;
+        }
+        marginPct[0] = MarginPct(balances[0].token, points);
+        return marginPct;
     }
 
     function lpNotionalUsd() external view override returns (uint256 notionalUsd) {

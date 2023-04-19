@@ -35,7 +35,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         LibTrading.TradingStorage storage ts, OpenTrade storage ot,
         bytes32 tradeHash, uint256 marketPrice, uint256 closePrice
     ) private returns (IOrderAndTradeHistory.CloseInfo memory) {
-        int256 longAccFundingFeePerShare = ITradingCore(address(this)).updatePairPositionInfo(ot.pairBase, closePrice, marketPrice, ot.qty, ot.isLong, false);
+        int256 longAccFundingFeePerShare = ITradingCore(address(this)).updatePairPositionInfo(ot.pairBase, ot.entryPrice, marketPrice, ot.qty, ot.isLong, false);
         IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(ot.tokenIn);
         int256 fundingFee = LibTrading.calcFundingFee(ot, mt, marketPrice, longAccFundingFeePerShare);
         uint256 closeNotionalUsd = closePrice * ot.qty;
@@ -312,7 +312,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                     emit ExecuteCloseRejected(ot.user, t.tradeHash, ExecutionType.LIQ, t.price, marketPrice);
                     continue;
                 }
-                ITradingCore(address(this)).updatePairPositionInfo(ot.pairBase, closePrice, marketPrice, ot.qty, ot.isLong, false);
+                ITradingCore(address(this)).updatePairPositionInfo(ot.pairBase, ot.entryPrice, marketPrice, ot.qty, ot.isLong, false);
                 _executeLiquidate(ts, ot, t.tradeHash, closePrice, pnl, fundingFee, closeFee);
             }
         }
@@ -344,7 +344,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
     ) private {
         uint256 _closeFee = _settleForLiqTrade(ts, ot, tradeHash, pnl, fundingFee, closeFee);
 
-        IOrderAndTradeHistory.CloseInfo memory closeInfo = IOrderAndTradeHistory.CloseInfo(uint64(liqPrice), int96(fundingFee), uint96(_closeFee), 0);
+        IOrderAndTradeHistory.CloseInfo memory closeInfo = IOrderAndTradeHistory.CloseInfo(uint64(liqPrice), int96(fundingFee), uint96(_closeFee), int96(pnl));
         _saveCloseTradeHistory(tradeHash, closeInfo, IOrderAndTradeHistory.ActionType.LIQUIDATED);
         emit ExecuteCloseSuccessful(ot.user, tradeHash, ExecutionType.LIQ, closeInfo);
         _removeOpenTrade(ts, ot, tradeHash);

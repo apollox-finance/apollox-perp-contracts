@@ -24,16 +24,16 @@ library LibPairsManager {
         uint256 notionalUsd;
         uint16 tier;
         uint16 maxLeverage;
-        uint16 initialLostP; // %
-        uint16 liqLostP;     // %
+        uint16 initialLostP; // 1e4
+        uint16 liqLostP;     // 1e4
     }
 
     struct SlippageConfig {
         string name;
         uint256 onePercentDepthAboveUsd;
         uint256 onePercentDepthBelowUsd;
-        uint16 slippageLongP;       // %
-        uint16 slippageShortP;      // %
+        uint16 slippageLongP;       // 1e4
+        uint16 slippageShortP;      // 1e4
         uint16 index;
         IPairsManager.SlippageType slippageType;
         bool enable;
@@ -125,6 +125,9 @@ library LibPairsManager {
         PairsManagerStorage storage pms = pairsManagerStorage();
         SlippageConfig storage config = pms.slippageConfigs[index];
         require(!config.enable, "LibPairsManager: Configuration already exists");
+        if (slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
+            require(onePercentDepthAboveUsd > 0 && onePercentDepthBelowUsd > 0, "LibPairsManager: Invalid dynamic slippage parameter configuration");
+        }        
         config.index = index;
         config.name = name;
         config.enable = true;
@@ -150,6 +153,9 @@ library LibPairsManager {
         PairsManagerStorage storage pms = pairsManagerStorage();
         SlippageConfig storage config = pms.slippageConfigs[sc.index];
         require(config.enable, "LibPairsManager: Configuration not enabled");
+        if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
+            require(sc.onePercentDepthAboveUsd > 0 && sc.onePercentDepthBelowUsd > 0, "LibPairsManager: Invalid dynamic slippage parameter configuration");
+        }
 
         config.slippageType = sc.slippageType;
         config.onePercentDepthAboveUsd = sc.onePercentDepthAboveUsd;
@@ -267,6 +273,9 @@ library LibPairsManager {
             pms.pairs[lastBase].basePosition = uint16(basePosition);
         }
         pairBases.pop();
+        // Removing a pair does not delete the leverageMargins mapping data from the Pair struct.
+        // If the pair is added again, a new leverageMargins value will be set during the addition,
+        // which will overwrite the previous old value.
         delete pms.pairs[base];
         emit RemovePair(base);
     }
@@ -283,7 +292,7 @@ library LibPairsManager {
     function batchUpdatePairStatus(IPairsManager.PairType pairType, IPairsManager.PairStatus status) internal {
         PairsManagerStorage storage pms = pairsManagerStorage();
         address[] memory pairBases = pms.pairBases;
-        for (UC i = ZERO; i <= uc(pairBases.length); i = i + ONE) {
+        for (UC i = ZERO; i < uc(pairBases.length); i = i + ONE) {
             Pair storage pair = pms.pairs[pairBases[i.into()]];
             if (pair.pairType == pairType) {
                 IPairsManager.PairStatus oldStatus = pair.status;

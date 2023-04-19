@@ -45,7 +45,7 @@ interface IVault {
 
     function updateToken(address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool dynamicFee) external;
 
-    function updateAsMagin(address tokenAddress, bool asMagin) external;
+    function updateAsMargin(address tokenAddress, bool asMargin) external;
 
     function changeWeight(uint16[] memory weights) external;
 
@@ -68,10 +68,4 @@ interface IVault {
     function decreaseByCloseTrade(address token, uint256 amount) external returns (ITradingClose.SettleToken[] memory);
 
     function maxWithdrawAbleUsd() external view returns (int256);
-
-    //    function transferToExchangeTreasury(address[] calldata tokens, uint256[] calldata amounts) external;
-    //
-    //    function transferToExchangeTreasuryBNB(uint256 amount) external;
-    //
-    //    function receiveFromExchangeTreasury(bytes[] calldata messages, bytes[] calldata signatures) external;
 }

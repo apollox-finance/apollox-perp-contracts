@@ -54,21 +54,21 @@ interface IPairsManager {
     struct LeverageMargin {
         uint256 notionalUsd;
         uint16 maxLeverage;
-        uint16 initialLostP; // %
-        uint16 liqLostP;     // %
+        uint16 initialLostP; // 1e4
+        uint16 liqLostP;     // 1e4
     }
 
     struct SlippageConfig {
         uint256 onePercentDepthAboveUsd;
         uint256 onePercentDepthBelowUsd;
-        uint16 slippageLongP;       // %
-        uint16 slippageShortP;      // %
+        uint16 slippageLongP;       // 1e4
+        uint16 slippageShortP;      // 1e4
         SlippageType slippageType;
     }
 
     struct FeeConfig {
-        uint16 openFeeP;     //  %
-        uint16 closeFeeP;    //  %
+        uint16 openFeeP;     //  1e4
+        uint16 closeFeeP;    //  1e4
     }
 
     struct TradingPair {

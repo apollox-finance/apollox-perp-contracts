@@ -31,8 +31,8 @@ library LibPriceFacade {
         mapping(address => LatestCallbackPrice) callbackPrices;
         // keccak256(token, block.number) =>
         mapping(bytes32 => PendingPrice) pendingPrices;
-        uint16 lowPriceGapP;   // %
-        uint16 highPriceGapP;  // %
+        uint16 lowPriceGapP;   // 1e4
+        uint16 highPriceGapP;  // 1e4
         uint16 maxDelay;
     }
 
@@ -134,7 +134,7 @@ library LibPriceFacade {
         cachePrice.price = price;
         // The time interval is too long.
         // receive the current price but not use it
-        // and wait for the next price to be feed.
+        // and wait for the next price to be fed.
         if (block.timestamp > updatedAt + pfs.maxDelay) {
             emit PriceRejected(msg.sender, requestId, pendingPrice.token, price, beforePrice, updatedAt);
             return;

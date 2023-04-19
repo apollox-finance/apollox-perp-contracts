@@ -31,6 +31,9 @@ library LibChainlinkPrice {
         ChainlinkPriceStorage storage cps = chainlinkPriceStorage();
         PriceFeed storage pf = cps.priceFeeds[tokenAddress];
         require(pf.feedAddress == address(0), "LibChainlinkPrice: Can't add price feed that already exists");
+        AggregatorV3Interface oracle = AggregatorV3Interface(priceFeed);
+        (, int256 price, ,,) = oracle.latestRoundData();
+        require(price > 0, "LibChainlinkPrice: Invalid priceFeed address");
         pf.tokenAddress = tokenAddress;
         pf.feedAddress = priceFeed;
         pf.tokenAddressPosition = uint32(cps.tokenAddresses.length);
@@ -43,7 +46,7 @@ library LibChainlinkPrice {
         ChainlinkPriceStorage storage cps = chainlinkPriceStorage();
         PriceFeed storage pf = cps.priceFeeds[tokenAddress];
         address priceFeed = pf.feedAddress;
-        require(pf.feedAddress != address(0), "LibChainlinkPrice: Price feed does not exist");
+        require(priceFeed != address(0), "LibChainlinkPrice: Price feed does not exist");
 
         uint256 lastPosition = cps.tokenAddresses.length - 1;
         uint256 tokenAddressPosition = pf.tokenAddressPosition;
@@ -57,14 +60,15 @@ library LibChainlinkPrice {
         emit SupportChainlinkPriceFeed(tokenAddress, priceFeed, false);
     }
 
-    function getPriceFromChainlink(address token) internal view returns (uint256 price, uint8 decimals, uint256 startedAt) {
+    function getPriceFromChainlink(address token) internal view returns (uint256 price, uint8 decimals, uint256 updateTime) {
         ChainlinkPriceStorage storage cps = chainlinkPriceStorage();
         address priceFeed = cps.priceFeeds[token].feedAddress;
         require(priceFeed != address(0), "LibChainlinkPrice: Price feed does not exist");
         AggregatorV3Interface oracle = AggregatorV3Interface(priceFeed);
-        (, int256 price_, uint256 startedAt_,,) = oracle.latestRoundData();
+        (, int256 price_, ,uint256 updatedAt,) = oracle.latestRoundData();
+        require(price_ > 0, "LibChainlinkPrice: price cannot be negative");        
         price = uint256(price_);
         decimals = oracle.decimals();
-        return (price, decimals, startedAt_);
+        return (price, decimals, updatedAt);
     }
 }

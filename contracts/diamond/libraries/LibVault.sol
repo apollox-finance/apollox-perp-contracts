@@ -39,7 +39,7 @@ library LibVault {
         mapping(address => uint256) treasury;
         address wbnb;
         address exchangeTreasury; // obsolete
-        uint16 securityMarginP;   // %
+        uint16 securityMarginP;   // 1e4
     }
 
     function vaultStorage() internal pure returns (VaultStorage storage vs) {
@@ -66,7 +66,7 @@ library LibVault {
 
     function initialize(address wbnb) internal {
         VaultStorage storage vs = vaultStorage();
-        require(vs.wbnb == address(0), "LibAlpManager: Already initialized");
+        require(vs.wbnb == address(0), "LibVault: Already initialized");
         vs.wbnb = wbnb;
     }
 
@@ -80,7 +80,7 @@ library LibVault {
     ) internal {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
-        require(at.weight == 0, "LibVault: Can't add token that already exists");
+        require(at.tokenAddress == address(0), "LibVault: Can't add token that already exists");
         if (dynamicFee && taxBasisPoints <= feeBasisPoints) {
             revert("LibVault: TaxBasisPoints must be greater than feeBasisPoints at dynamic rates");
         }
@@ -101,7 +101,7 @@ library LibVault {
     function removeToken(address tokenAddress, uint16[] memory weights) internal {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
-        require(at.weight > 0, "LibVault: Token does not exist");
+        require(at.tokenAddress != address(0), "LibVault: Token does not exist");
 
         changeWeight(weights);
         uint256 lastPosition = vs.tokenAddresses.length - 1;
@@ -120,7 +120,7 @@ library LibVault {
     function updateToken(address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool dynamicFee) internal {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
-        require(at.weight > 0, "LibVault: Token does not exist");
+        require(at.tokenAddress != address(0), "LibVault: Token does not exist");
         if (dynamicFee && taxBasisPoints <= feeBasisPoints) {
             revert("LibVault: TaxBasisPoints must be greater than feeBasisPoints at dynamic rates");
         }
@@ -131,12 +131,12 @@ library LibVault {
         emit UpdateToken(tokenAddress, oldFeePoints, oldTaxPoints, oldDynamicFee, feeBasisPoints, taxBasisPoints, dynamicFee);
     }
 
-    function updateAsMagin(address tokenAddress, bool asMagin) internal {
+    function updateAsMargin(address tokenAddress, bool asMargin) internal {
         AvailableToken storage at = vaultStorage().tokens[tokenAddress];
-        require(at.weight > 0, "LibVault: Token does not exist");
-        require(at.asMargin != asMagin, "LibVault: No modification required");
-        at.asMargin = asMagin;
-        emit SupportTokenAsMargin(tokenAddress, asMagin);
+        require(at.tokenAddress != address(0), "LibVault: Token does not exist");
+        require(at.asMargin != asMargin, "LibVault: No modification required");
+        at.asMargin = asMargin;
+        emit SupportTokenAsMargin(tokenAddress, asMargin);
     }
 
     function changeWeight(uint16[] memory weights) internal {
@@ -172,12 +172,12 @@ library LibVault {
         if (!transferred) {
             IERC20(token).safeTransferFrom(from, address(this), amount);
         }
-        LibVault.VaultStorage storage vs = LibVault.vaultStorage();
+        LibVault.VaultStorage storage vs = vaultStorage();
         vs.treasury[token] += amount;
     }
 
     function depositBNB(uint256 amount) internal {
-        IWBNB(WBNB()).deposit{value : amount}();
+        IWBNB(WBNB()).deposit{value: amount}();
         deposit(WBNB(), amount);
     }
 
@@ -211,7 +211,7 @@ library LibVault {
                     index = index + ONE;
                 }
             }
-            require(index.into() > 0 && otherTokenAmountUsd < totalBalanceUsd, "LibVault: Insufficient funds in the treasury");
+            require(otherTokenAmountUsd <= totalBalanceUsd, "LibVault: Insufficient funds in the treasury");
             settleTokens = new ITradingClose.SettleToken[]((index + ONE).into());
             settleTokens[0] = st;
             vs.treasury[token] = 0;
@@ -237,7 +237,7 @@ library LibVault {
     // The caller checks whether the token exists and the amount>0
     // in order to return quickly in case of an error
     function withdraw(address receiver, address token, uint256 amount) internal {
-        LibVault.VaultStorage storage vs = LibVault.vaultStorage();
+        LibVault.VaultStorage storage vs = vaultStorage();
         require(vs.treasury[token] >= amount, "LibVault: Treasury insufficient balance");
         vs.treasury[token] -= amount;
         IERC20(token).safeTransfer(receiver, amount);
@@ -246,7 +246,7 @@ library LibVault {
     // The entry for calling this method needs to prevent reentry
     // use "../security/RentalGuard.sol"
     function withdrawBNB(address payable receiver, uint256 amount) internal {
-        LibVault.VaultStorage storage vs = LibVault.vaultStorage();
+        LibVault.VaultStorage storage vs = vaultStorage();
         require(vs.treasury[WBNB()] >= amount, "LibVault: Treasury insufficient balance");
         IWBNB(WBNB()).withdraw(amount);
         vs.treasury[WBNB()] -= amount;
@@ -254,26 +254,26 @@ library LibVault {
     }
 
     function getTotalValueUsd() internal view returns (int256) {
-        LibVault.VaultStorage storage vs = LibVault.vaultStorage();
+        LibVault.VaultStorage storage vs = vaultStorage();
         uint256 numTokens = vs.tokenAddresses.length;
         uint256 totalValueUsd;
         for (UC i = ZERO; i < uc(numTokens); i = i + ONE) {
             address tokenAddress = vs.tokenAddresses[i.into()];
             LibVault.AvailableToken storage at = vs.tokens[tokenAddress];
-            uint256 price = LibPriceFacade.getPrice(at.tokenAddress);
-            uint256 balance = vs.treasury[at.tokenAddress];
+            uint256 price = LibPriceFacade.getPrice(tokenAddress);
+            uint256 balance = vs.treasury[tokenAddress];
             uint256 valueUsd = price * balance * 1e10 / (10 ** at.decimals);
             totalValueUsd += valueUsd;
         }
-        return int256(totalValueUsd) + ITradingCore(address(this)).lpUnrealizedPnlUsd();
+        return int256(totalValueUsd);
     }
 
     function getTokenByAddress(address tokenAddress) internal view returns (AvailableToken memory) {
         return LibVault.vaultStorage().tokens[tokenAddress];
     }
 
-    function maxWithdrawAbleUsd() internal view returns (int256) {
+    function maxWithdrawAbleUsd(int256 totalValueUsd) internal view returns (int256) {
         LibVault.VaultStorage storage vs = vaultStorage();
-        return getTotalValueUsd() - int256(ITradingCore(address(this)).lpNotionalUsd() * vs.securityMarginP / 1e4);
+        return totalValueUsd - int256(ITradingCore(address(this)).lpNotionalUsd() * vs.securityMarginP / 1e4);
     }
 }

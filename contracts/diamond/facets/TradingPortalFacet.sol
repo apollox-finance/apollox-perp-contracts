@@ -132,4 +132,16 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
         IPriceFacade(address(this)).requestPrice(tradeHash, ot.pairBase, false);
     }
 
+    function addMargin(bytes32 tradeHash, uint96 amount) external override {
+        require(amount > 0, "TradingPortalFacet: amount must be greater than 0");
+        LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
+        OpenTrade storage ot = ts.openTrades[tradeHash];
+        _check(ot);
+        uint96 beforeMargin = ot.margin;
+        ot.margin += amount;
+        ts.openTradeAmountIns[ot.tokenIn] += amount;
+        IOrderAndTradeHistory(address(this)).updateMargin(tradeHash, ot.margin);
+        IERC20(ot.tokenIn).safeTransferFrom(msg.sender, address(this), amount);
+        emit UpdateMargin(msg.sender, tradeHash, beforeMargin, ot.margin);
+    }
 }

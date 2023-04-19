@@ -65,6 +65,8 @@ interface IOrderAndTradeHistory {
 
     function closeTrade(bytes32 tradeHash, CloseInfo memory, ActionType aType) external;
 
+    function updateMargin(bytes32 tradeHash, uint96 newMargin) external;
+
     function getOrderAndTradeHistory(
         address user, uint start, uint8 size
     ) external view returns (OrderAndTradeHistory[] memory);
