@@ -273,6 +273,9 @@ library LibPairsManager {
             pms.pairs[lastBase].basePosition = uint16(basePosition);
         }
         pairBases.pop();
+        // Removing a pair does not delete the leverageMargins mapping data from the Pair struct.
+        // If the pair is added again, a new leverageMargins value will be set during the addition,
+        // which will overwrite the previous old value.
         delete pms.pairs[base];
         emit RemovePair(base);
     }
