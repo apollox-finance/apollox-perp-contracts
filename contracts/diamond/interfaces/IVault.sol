@@ -38,16 +38,16 @@ interface IVault {
 
     function addToken(
         address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints,
-        bool stable, bool dynamicFee, bool asMargin, uint16[] memory weights
+        bool stable, bool dynamicFee, bool asMargin, uint16[] calldata weights
     ) external;
 
-    function removeToken(address tokenAddress, uint16[] memory weights) external;
+    function removeToken(address tokenAddress, uint16[] calldata weights) external;
 
     function updateToken(address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool dynamicFee) external;
 
     function updateAsMargin(address tokenAddress, bool asMargin) external;
 
-    function changeWeight(uint16[] memory weights) external;
+    function changeWeight(uint16[] calldata weights) external;
 
     function setSecurityMarginP(uint16 _securityMarginP) external;
 
