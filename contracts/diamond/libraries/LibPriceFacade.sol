@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "../../utils/Constants.sol";
 import "../interfaces/ITradingOpen.sol";
 import "../interfaces/ITradingClose.sol";
 import "./LibChainlinkPrice.sol";
@@ -107,6 +108,7 @@ library LibPriceFacade {
         PriceFacadeStorage storage pfs = priceFacadeStorage();
         bytes32 requestId = keccak256(abi.encode(token, block.number));
         PendingPrice storage pendingPrice = pfs.pendingPrices[requestId];
+        require(pendingPrice.ids.length < Constants.MAX_REQUESTS_PER_PAIR_IN_BLOCK, "LibPriceFacade: The requests for price retrieval are too frequent.");
         pendingPrice.ids.push(OpenOrClose(id, isOpen));
         if (pendingPrice.blockNumber != block.number) {
             pendingPrice.token = token;
@@ -164,6 +166,7 @@ library LibPriceFacade {
     function getPriceFromCacheOrOracle(PriceFacadeStorage storage pfs, address token) internal view returns (uint64, uint40) {
         LatestCallbackPrice memory cachePrice = pfs.callbackPrices[token];
         (uint256 price, uint8 decimals, uint256 oracleUpdatedAt) = LibChainlinkPrice.getPriceFromChainlink(token);
+        require(price <= type(uint64).max, "LibPriceFacade: Invalid price");
         uint40 updatedAt = cachePrice.timestamp >= oracleUpdatedAt ? cachePrice.timestamp : uint40(oracleUpdatedAt);
         // Take the newer price
         uint64 tokenPrice = cachePrice.timestamp >= oracleUpdatedAt ? cachePrice.price :
