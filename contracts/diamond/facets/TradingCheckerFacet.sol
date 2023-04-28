@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "../../utils/Constants.sol";
 import "../interfaces/IVault.sol";
 import "../interfaces/ILimitOrder.sol";
 import "../interfaces/IPriceFacade.sol";
