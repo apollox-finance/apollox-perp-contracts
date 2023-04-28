@@ -58,9 +58,9 @@ contract PairsManagerFacet is IPairsManager {
     function addPair(
         address base, string calldata name,
         PairType pairType, PairStatus status,
-        PairMaxOiAndFundingFeeConfig memory pairConfig,
+        PairMaxOiAndFundingFeeConfig calldata pairConfig,
         uint16 slippageConfigIndex, uint16 feeConfigIndex,
-        LibPairsManager.LeverageMargin[] memory leverageMargins
+        LibPairsManager.LeverageMargin[] calldata leverageMargins
     ) external override {
         LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
@@ -116,14 +116,14 @@ contract PairsManagerFacet is IPairsManager {
         LibPairsManager.updatePairFee(base, feeConfigIndex);
     }
 
-    function updatePairLeverageMargin(address base, LibPairsManager.LeverageMargin[] memory leverageMargins) external override {
+    function updatePairLeverageMargin(address base, LibPairsManager.LeverageMargin[] calldata leverageMargins) external override {
         LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
         _leverageMarginsCheck(leverageMargins);
         LibPairsManager.updatePairLeverageMargin(base, leverageMargins);
     }
 
-    function _leverageMarginsCheck(LibPairsManager.LeverageMargin[] memory leverageMargins) private pure {
+    function _leverageMarginsCheck(LibPairsManager.LeverageMargin[] calldata leverageMargins) private pure {
         require(leverageMargins.length > 0, "PairsManagerFacet: Must specify leverage and margin allocation");
         if (leverageMargins.length == 1) {
             LibPairsManager.LeverageMargin memory lm = leverageMargins[0];
@@ -135,20 +135,27 @@ contract PairsManagerFacet is IPairsManager {
             LibPairsManager.LeverageMargin memory nextLm;
             for (UC i = ZERO; i < uc(leverageMargins.length - 1); i = i + ONE) {
                 lm = leverageMargins[i.into()];
-                if (lm.tier != (i + ONE).into() || lm.maxLeverage > 1e3
-                || lm.liqLostP >= 1e4
-                || lm.initialLostP >= lm.liqLostP
-                || lm.tier >= (nextLm = leverageMargins[(i + ONE).into()]).tier
-                || lm.notionalUsd >= nextLm.notionalUsd
-                || lm.maxLeverage <= nextLm.maxLeverage
-                    || lm.liqLostP <= nextLm.liqLostP) {
-                    revert("PairsManagerFacet: leverageMargins parameter is invalid");
-                }
+                nextLm = leverageMargins[(i + ONE).into()];
+                require(
+                    lm.tier == (i + ONE).into()
+                    && lm.maxLeverage <= 1e3
+                    && lm.liqLostP < 1e4 && lm.liqLostP > 1e3
+                    && lm.initialLostP < lm.liqLostP
+                    && lm.notionalUsd < nextLm.notionalUsd
+                    && lm.initialLostP > nextLm.initialLostP
+                    && lm.maxLeverage > nextLm.maxLeverage
+                    && lm.liqLostP > nextLm.liqLostP,
+                    "PairsManagerFacet: leverageMargins parameter is invalid"
+                );
             }
             LibPairsManager.LeverageMargin memory lastLm = leverageMargins[leverageMargins.length - 1];
-            require(lastLm.tier == leverageMargins.length && lastLm.maxLeverage <= 1e3 &&
-            lastLm.liqLostP < 1e4 && lastLm.initialLostP < lastLm.liqLostP,
-                "PairsManagerFacet: leverageMargins parameter is invalid");
+            require(
+                lastLm.tier == leverageMargins.length
+                && lastLm.maxLeverage <= 1e3
+                && lastLm.liqLostP < 1e4 && lastLm.liqLostP > 1e3
+                && lastLm.initialLostP < lastLm.liqLostP,
+                "PairsManagerFacet: leverageMargins parameter is invalid"
+            );
         }
     }
 
