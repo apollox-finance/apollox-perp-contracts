@@ -25,14 +25,15 @@ contract VaultFacet is IVault, OnlySelf {
 
     function addToken(
         address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool stable,
-        bool dynamicFee, bool asMargin, uint16[] memory weights
+        bool dynamicFee, bool asMargin, uint16[] calldata weights
     ) external override {
         LibAccessControlEnumerable.checkRole(Constants.TOKEN_OPERATOR_ROLE);
+        require(feeBasisPoints < 1e4 && taxBasisPoints < 1e4, "VaultFacet: The value of feeBasisPoints or taxBasisPoints is too large");
         require(tokenAddress != address(0), "VaultFacet: Token address can't be 0 address");
         LibVault.addToken(tokenAddress, feeBasisPoints, taxBasisPoints, stable, dynamicFee, asMargin, weights);
     }
 
-    function removeToken(address tokenAddress, uint16[] memory weights) external override {
+    function removeToken(address tokenAddress, uint16[] calldata weights) external override {
         LibAccessControlEnumerable.checkRole(Constants.TOKEN_OPERATOR_ROLE);
         require(tokenAddress != address(0), "VaultFacet: Token address can't be 0 address");
         LibVault.removeToken(tokenAddress, weights);
@@ -40,6 +41,7 @@ contract VaultFacet is IVault, OnlySelf {
 
     function updateToken(address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool dynamicFee) external override {
         LibAccessControlEnumerable.checkRole(Constants.TOKEN_OPERATOR_ROLE);
+        require(feeBasisPoints < 1e4 && taxBasisPoints < 1e4, "VaultFacet: The value of feeBasisPoints or taxBasisPoints is too large");
         require(tokenAddress != address(0), "VaultFacet: Token address can't be 0 address");
         LibVault.updateToken(tokenAddress, feeBasisPoints, taxBasisPoints, dynamicFee);
     }
@@ -50,7 +52,7 @@ contract VaultFacet is IVault, OnlySelf {
         LibVault.updateAsMargin(tokenAddress, asMargin);
     }
 
-    function changeWeight(uint16[] memory weights) external override {
+    function changeWeight(uint16[] calldata weights) external override {
         LibAccessControlEnumerable.checkRole(Constants.TOKEN_OPERATOR_ROLE);
         LibVault.changeWeight(weights);
     }
