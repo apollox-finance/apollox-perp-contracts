@@ -163,10 +163,10 @@ library LibPriceFacade {
 
     function getPriceFromCacheOrOracle(PriceFacadeStorage storage pfs, address token) internal view returns (uint64, uint40) {
         LatestCallbackPrice memory cachePrice = pfs.callbackPrices[token];
-        (uint256 price, uint8 decimals,uint256 startedAt) = LibChainlinkPrice.getPriceFromChainlink(token);
-        uint40 updatedAt = cachePrice.timestamp >= startedAt ? cachePrice.timestamp : uint40(startedAt);
+        (uint256 price, uint8 decimals, uint256 oracleUpdatedAt) = LibChainlinkPrice.getPriceFromChainlink(token);
+        uint40 updatedAt = cachePrice.timestamp >= oracleUpdatedAt ? cachePrice.timestamp : uint40(oracleUpdatedAt);
         // Take the newer price
-        uint64 tokenPrice = cachePrice.timestamp >= startedAt ? cachePrice.price :
+        uint64 tokenPrice = cachePrice.timestamp >= oracleUpdatedAt ? cachePrice.price :
         (decimals == 8 ? uint64(price) : uint64(price * 1e8 / (10 ** decimals)));
         return (tokenPrice, updatedAt);
     }
