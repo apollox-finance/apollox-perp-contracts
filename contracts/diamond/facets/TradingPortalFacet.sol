@@ -17,7 +17,7 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
 
     using SafeERC20 for IERC20;
 
-    function _check(ITrading.OpenTrade memory ot) internal view {
+    function _check(ITrading.OpenTrade storage ot) internal view {
         require(ot.margin > 0, "TradingPortalFacet: Trade information does not exist");
         require(ot.user == msg.sender, "TradingPortalFacet: Can only be updated by yourself");
     }
