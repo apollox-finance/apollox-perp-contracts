@@ -44,7 +44,7 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
     function _marketTrade(bytes32 tradeHash, OpenTrade memory ot) private {
         IOrderAndTradeHistory(address(this)).marketTrade(
             tradeHash,
-            IOrderAndTradeHistory.OrderInfo(ot.user, ot.margin + ot.openFee, ot.tokenIn, ot.qty, ot.isLong, ot.pairBase, ot.entryPrice),
+            IOrderAndTradeHistory.OrderInfo(ot.user, ot.margin + ot.openFee + ot.executionFee, ot.tokenIn, ot.qty, ot.isLong, ot.pairBase, ot.entryPrice),
             IOrderAndTradeHistory.TradeInfo(ot.margin, ot.openFee, ot.executionFee)
         );
     }
