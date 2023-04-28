@@ -75,19 +75,14 @@ library LibAlpManager {
     function _calculateAlpAmount(LibVault.AvailableToken memory at, uint256 amount) private view returns (uint256 alpAmount) {
         require(at.tokenAddress != address(0), "LibAlpManager: Token does not exist");
         (int256 lpUnPnlUsd, int256 lpTokenUnPnlUsd) = ITradingCore(address(this)).lpUnrealizedPnlUsd(at.tokenAddress);
-        uint256 alpPrice_ = _alpPrice(LibVault.getTotalValueUsd() + lpUnPnlUsd);
-        require(alpPrice_ > 0, "LibAlpManager: ALP Price is not available");
+        int256 totalValueUsd = LibVault.getTotalValueUsd() + lpUnPnlUsd;
+        require(totalValueUsd > 0, "LibAlpManager: LP balance is insufficient");
 
         (uint256 tokenInPrice,) = IPriceFacade(address(this)).getPriceFromCacheOrOracle(at.tokenAddress);
         uint256 amountUsd = tokenInPrice * amount * 1e10 / (10 ** at.decimals);
         int256 poolTokenInUsd = int256(LibVault.vaultStorage().treasury[at.tokenAddress] * tokenInPrice * 1e10 / (10 ** at.decimals)) + lpTokenUnPnlUsd;
-        // ∵ alpPrice_ > 0
-        // ∴ (LibVault.getTotalValueUsd() + lpUnPnlUsd) > 0
-        uint256 afterTaxAmountUsd =
-        amountUsd *
-        (1e4 - _getFeePoint(at, uint256(LibVault.getTotalValueUsd() + lpUnPnlUsd), poolTokenInUsd, amountUsd, true)) /
-        1e4;
-        alpAmount = afterTaxAmountUsd * 1e8 / alpPrice_;
+        uint256 afterTaxAmountUsd = amountUsd * (1e4 - _getFeePoint(at, uint256(totalValueUsd), poolTokenInUsd, amountUsd, true)) / 1e4;
+        alpAmount = afterTaxAmountUsd * 1e8 / _alpPrice(totalValueUsd);
     }
 
     function _addMinted(address account) private {
@@ -117,15 +112,13 @@ library LibAlpManager {
         require(at.tokenAddress != address(0), "LibAlpManager: Token does not exist");
         (int256 lpUnPnlUsd, int256 lpTokenUnPnlUsd) = ITradingCore(address(this)).lpUnrealizedPnlUsd(at.tokenAddress);
         int256 totalValueUsd = LibVault.getTotalValueUsd() + lpUnPnlUsd;
-        uint256 alpPrice_ = _alpPrice(totalValueUsd);
-        require(alpPrice_ > 0, "LibAlpManager: ALP Price is not available");
+        require(totalValueUsd > 0, "LibAlpManager: LP balance is insufficient");
+
         (uint256 tokenOutPrice,) = IPriceFacade(address(this)).getPriceFromCacheOrOracle(at.tokenAddress);
         int256 poolTokenOutUsd = int256(LibVault.vaultStorage().treasury[at.tokenAddress] * tokenOutPrice * 1e10 / (10 ** at.decimals)) + lpTokenUnPnlUsd;
-        uint256 amountOutUsd = alpPrice_ * alpAmount / 1e8;
+        uint256 amountOutUsd = _alpPrice(totalValueUsd) * alpAmount / 1e8;
         // It is not allowed for the value of any token in the LP to become negative after burning.
         require(poolTokenOutUsd >= int256(amountOutUsd), "LibAlpManager: tokenOut balance is insufficient");
-        // ∵ alpPrice_ > 0
-        // ∴ (LibVault.getTotalValueUsd() + lpUnPnlUsd) > 0
         uint256 afterTaxAmountOutUsd = amountOutUsd * (1e4 - _getFeePoint(at, uint256(totalValueUsd), poolTokenOutUsd, amountOutUsd, false)) / 1e4;
         require(int256(afterTaxAmountOutUsd) <= LibVault.maxWithdrawAbleUsd(totalValueUsd), "LibAlpManager: tokenOut balance is insufficient");
         return afterTaxAmountOutUsd * (10 ** at.decimals) / (tokenOutPrice * 1e10);
