@@ -12,6 +12,7 @@ contract TradingConfigFacet is ITradingConfig {
     using Bits for uint;
 
     function initTradingConfigFacet(uint256 executionFeeUsd, uint256 minNotionalUsd, uint24 maxTakeProfitP) external {
+        require(minNotionalUsd > 0 && maxTakeProfitP > 0, "TradingConfigFacet: Invalid parameter");
         LibAccessControlEnumerable.checkRole(Constants.DEPLOYER_ROLE);
         LibTradingConfig.initialize(executionFeeUsd, minNotionalUsd, maxTakeProfitP);
     }
