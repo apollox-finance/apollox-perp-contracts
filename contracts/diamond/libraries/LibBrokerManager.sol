@@ -86,6 +86,7 @@ library LibBrokerManager {
 
     function removeBroker(uint24 id) internal {
         BrokerManagerStorage storage bms = brokerManagerStorage();
+        require(id != bms.defaultBroker, "LibBrokerManager: Default broker cannot be removed.");
         withdrawCommission(id);
 
         uint24[] storage brokerIds = bms.brokerIds;
