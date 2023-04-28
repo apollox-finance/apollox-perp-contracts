@@ -171,7 +171,7 @@ library LibPairsManager {
     function addPair(
         IPairsManager.PairSimple memory ps,
         uint16 slippageConfigIndex, uint16 feeConfigIndex,
-        LeverageMargin[] memory leverageMargins
+        LeverageMargin[] calldata leverageMargins
     ) internal {
         PairsManagerStorage storage pms = pairsManagerStorage();
         require(pms.pairBases.length < 70, "LibPairsManager: Exceed the maximum number");
@@ -347,7 +347,7 @@ library LibPairsManager {
         emit UpdatePairFee(base, oldFeeConfigIndex, feeConfigIndex);
     }
 
-    function updatePairLeverageMargin(address base, LeverageMargin[] memory leverageMargins) internal {
+    function updatePairLeverageMargin(address base, LeverageMargin[] calldata leverageMargins) internal {
         PairsManagerStorage storage pms = pairsManagerStorage();
         Pair storage pair = pms.pairs[base];
         require(pair.base != address(0), "LibPairsManager: Pair does not exist");
