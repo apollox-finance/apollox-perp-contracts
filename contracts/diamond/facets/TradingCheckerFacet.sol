@@ -40,7 +40,7 @@ contract TradingCheckerFacet is ITradingChecker {
         }
     }
 
-    function checkLimitOrderTp(ILimitOrder.LimitOrder memory order) external view override {
+    function checkLimitOrderTp(ILimitOrder.LimitOrder calldata order) external view override {
         IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(order.tokenIn);
 
         // notionalUsd = price * qty
@@ -224,7 +224,7 @@ contract TradingCheckerFacet is ITradingChecker {
         );
     }
 
-    function checkMarketTradeTp(ITrading.OpenTrade memory ot) external view {
+    function checkMarketTradeTp(ITrading.OpenTrade calldata ot) external view {
         IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(ot.tokenIn);
 
         // notionalUsd = price * qty
@@ -351,7 +351,7 @@ contract TradingCheckerFacet is ITradingChecker {
     }
 
     function marketTradeCallbackCheck(
-        ITrading.PendingTrade memory pt, uint256 marketPrice
+        ITrading.PendingTrade calldata pt, uint256 marketPrice
     ) external view returns (bool result, uint96 openFee, uint96 executionFee, uint256 entryPrice, Refund refund) {
         if (pt.blockNumber + Constants.FEED_DELAY_BLOCK < block.number) {
             return (false, 0, 0, 0, Refund.FEED_DELAY);
@@ -422,7 +422,7 @@ contract TradingCheckerFacet is ITradingChecker {
     }
 
     function executeLiquidateCheck(
-        ITrading.OpenTrade memory ot, uint256 marketPrice, uint256 closePrice
+        ITrading.OpenTrade calldata ot, uint256 marketPrice, uint256 closePrice
     ) external view returns (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee) {
         IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(ot.tokenIn);
         IPairsManager.TradingPair memory pair = IPairsManager(address(this)).getPairForTrading(ot.pairBase);
