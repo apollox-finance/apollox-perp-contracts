@@ -64,7 +64,7 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         if (isLong) {
             uint slippage = sc.slippageLongP;
             if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-                // slippage = (longQty + qty) * price /  + 1
+                // slippage = (longQty + qty) * price / depthAboveUsd  + 1
                 slippage = (pairQty.longQty + qty) * limitPrice * 1e4 / sc.onePercentDepthAboveUsd + 1;
             }
             return limitPrice * (1e4 - slippage) / 1e4;
