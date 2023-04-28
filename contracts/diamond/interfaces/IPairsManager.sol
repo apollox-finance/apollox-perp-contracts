@@ -102,9 +102,9 @@ interface IPairsManager {
     function addPair(
         address base, string calldata name,
         PairType pairType, PairStatus status,
-        PairMaxOiAndFundingFeeConfig memory pairConfig,
+        PairMaxOiAndFundingFeeConfig calldata pairConfig,
         uint16 slippageConfigIndex, uint16 feeConfigIndex,
-        LibPairsManager.LeverageMargin[] memory leverageMargins
+        LibPairsManager.LeverageMargin[] calldata leverageMargins
     ) external;
 
     function updatePairMaxOi(address base, uint256 maxLongOiUsd, uint256 maxShortOiUsd) external;
@@ -123,7 +123,7 @@ interface IPairsManager {
 
     function updatePairFee(address base, uint16 feeConfigIndex) external;
 
-    function updatePairLeverageMargin(address base, LibPairsManager.LeverageMargin[] memory leverageMargins) external;
+    function updatePairLeverageMargin(address base, LibPairsManager.LeverageMargin[] calldata leverageMargins) external;
 
     function pairs() external view returns (PairView[] memory);
 
