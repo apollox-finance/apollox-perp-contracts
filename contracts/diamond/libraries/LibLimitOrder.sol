@@ -78,8 +78,11 @@ library LibLimitOrder {
         check(order);
 
         _cancelLimitOrder(orderHash, IOrderAndTradeHistory.ActionType.CANCEL_LIMIT);
-        IERC20(order.tokenIn).safeTransfer(order.user, order.amountIn);
+        // After calling the _removeOrder function, the order will no longer be available. Therefore,
+        // it is recommended to retrieve the necessary information for the safeTransfer function beforehand.
+        (address tokenIn, address user, uint256 amountIn) = (order.tokenIn, order.user, order.amountIn);
         _removeOrder(los, order, orderHash);
+        IERC20(tokenIn).safeTransfer(user, amountIn);
         emit CancelLimitOrder(msg.sender, orderHash);
     }
 
