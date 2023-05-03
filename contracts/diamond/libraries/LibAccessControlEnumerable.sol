@@ -60,8 +60,8 @@ library LibAccessControlEnumerable {
         if (!hasRole(role, account)) {
             acs.roles[role].members[account] = true;
             emit RoleGranted(role, account, msg.sender);
+            acs.roleMembers[role].add(account);            
         }
-        acs.roleMembers[role].add(account);
     }
 
     function revokeRole(bytes32 role, address account) internal {
@@ -69,8 +69,8 @@ library LibAccessControlEnumerable {
         if (hasRole(role, account)) {
             acs.roles[role].members[account] = false;
             emit RoleRevoked(role, account, msg.sender);
+            acs.roleMembers[role].remove(account);           
         }
-        acs.roleMembers[role].remove(account);
     }
 
     function setRoleAdmin(bytes32 role, bytes32 adminRole) internal {
@@ -79,5 +79,4 @@ library LibAccessControlEnumerable {
         acs.roles[role].adminRole = adminRole;
         emit RoleAdminChanged(role, previousAdminRole, adminRole);
     }
-
 }
