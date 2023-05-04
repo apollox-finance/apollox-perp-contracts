@@ -39,13 +39,12 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(ot.tokenIn);
         int256 fundingFee = LibTrading.calcFundingFee(ot, mt, marketPrice, longAccFundingFeePerShare);
         uint256 closeNotionalUsd = closePrice * ot.qty;
-        int256 pnl =
-        (
-        ot.isLong
-        ? int256(closeNotionalUsd) - int256(uint256(ot.entryPrice * ot.qty))
-        : int256(uint256(ot.entryPrice * ot.qty)) - int256(closeNotionalUsd)
-        )
-        * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
+        int256 pnl;
+        if (ot.isLong) {
+            pnl = (int256(closeNotionalUsd) - int256(uint256(ot.entryPrice * ot.qty))) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
+        } else {
+            pnl = (int256(uint256(ot.entryPrice * ot.qty)) - int256(closeNotionalUsd)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
+        }
         uint16 closeFeeP = IPairsManager(address(this)).getPairFeeConfig(ot.pairBase).closeFeeP;
         uint256 closeFee = closeNotionalUsd * closeFeeP * (10 ** mt.decimals) / (1e4 * 1e10 * mt.price);
 
