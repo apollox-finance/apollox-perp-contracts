@@ -434,9 +434,9 @@ contract TradingCheckerFacet is ITradingChecker {
         IPairsManager.LeverageMargin memory lm = marginLeverage(pair.leverageMargins, ot.entryPrice * ot.qty);
 
         if (ot.isLong) {
-            pnl = int256(closeNotionalUsd) - int256(uint256(ot.entryPrice * ot.qty));
+            pnl = (int256(closeNotionalUsd) - int256(uint256(ot.entryPrice * ot.qty))) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         } else {
-            pnl = int256(uint256(ot.entryPrice * ot.qty)) - int256(closeNotionalUsd);
+            pnl = (int256(uint256(ot.entryPrice * ot.qty)) - int256(closeNotionalUsd)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         }
         int256 loss = int256(closeFee) - fundingFee - pnl;
         return (loss > 0 && uint256(loss) * 1e4 >= lm.liqLostP * ot.margin, pnl, fundingFee, closeFee);
