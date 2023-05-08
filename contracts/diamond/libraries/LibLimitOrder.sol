@@ -39,8 +39,8 @@ library LibLimitOrder {
     event ExecuteLimitOrderSuccessful(address indexed user, bytes32 indexed orderHash);
 
     function check(ILimitOrder.LimitOrder storage order) internal view {
-        require(order.amountIn > 0, "LimitBookFacet: Order does not exist");
-        require(order.user == msg.sender, "LimitBookFacet: Can only be updated by yourself");
+        require(order.amountIn > 0, "LibLimitOrder: Order does not exist");
+        require(order.user == msg.sender, "LibLimitOrder: Can only be updated by yourself");
     }
 
     function openLimitOrder(IBook.OpenDataInput calldata data) internal {
