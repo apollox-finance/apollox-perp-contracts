@@ -16,7 +16,7 @@ contract OrderAndTradeHistoryFacet is IOrderAndTradeHistory, OnlySelf {
         actionInfos.push(ActionInfo(hash, uint40(block.timestamp), aType));
     }
 
-    function createLimitOrder(bytes32 orderHash, OrderInfo memory order) external onlySelf override {
+    function createLimitOrder(bytes32 orderHash, OrderInfo calldata order) external onlySelf override {
         LibOrderAndTradeHistory.OrderAndTradeHistoryStorage storage hs = LibOrderAndTradeHistory.historyStorage();
 
         hs.orderInfos[orderHash] = order;
@@ -29,14 +29,14 @@ contract OrderAndTradeHistoryFacet is IOrderAndTradeHistory, OnlySelf {
         _saveActionInfo(hs, hs.orderInfos[orderHash].user, orderHash, aType);
     }
 
-    function limitTrade(bytes32 tradeHash, TradeInfo memory trade) external onlySelf override {
+    function limitTrade(bytes32 tradeHash, TradeInfo calldata trade) external onlySelf override {
         LibOrderAndTradeHistory.OrderAndTradeHistoryStorage storage hs = LibOrderAndTradeHistory.historyStorage();
 
         hs.tradeInfos[tradeHash] = trade;
         _saveActionInfo(hs, hs.orderInfos[tradeHash].user, tradeHash, ActionType.OPEN);
     }
 
-    function marketTrade(bytes32 tradeHash, OrderInfo memory order, TradeInfo memory trade) external onlySelf override {
+    function marketTrade(bytes32 tradeHash, OrderInfo calldata order, TradeInfo calldata trade) external onlySelf override {
         LibOrderAndTradeHistory.OrderAndTradeHistoryStorage storage hs = LibOrderAndTradeHistory.historyStorage();
 
         hs.orderInfos[tradeHash] = order;
@@ -44,7 +44,7 @@ contract OrderAndTradeHistoryFacet is IOrderAndTradeHistory, OnlySelf {
         _saveActionInfo(hs, order.user, tradeHash, ActionType.OPEN);
     }
 
-    function closeTrade(bytes32 tradeHash, CloseInfo memory data, ActionType aType) external onlySelf override {
+    function closeTrade(bytes32 tradeHash, CloseInfo calldata data, ActionType aType) external onlySelf override {
         LibOrderAndTradeHistory.OrderAndTradeHistoryStorage storage hs = LibOrderAndTradeHistory.historyStorage();
 
         hs.closeInfos[tradeHash] = data;
@@ -61,14 +61,14 @@ contract OrderAndTradeHistoryFacet is IOrderAndTradeHistory, OnlySelf {
     ) external view override returns (OrderAndTradeHistory[] memory datas) {
         LibOrderAndTradeHistory.OrderAndTradeHistoryStorage storage hs = LibOrderAndTradeHistory.historyStorage();
 
-        ActionInfo[] memory infos = hs.actionInfos[user];
-        if (start >= infos.length || size == 0) {
+        if (start >= hs.actionInfos[user].length || size == 0) {
             datas = new OrderAndTradeHistory[](0);
         } else {
-            uint count = infos.length - start > size ? size : infos.length - start;
+            uint count = hs.actionInfos[user].length - start > size ? size : hs.actionInfos[user].length - start;
             datas = new OrderAndTradeHistory[](count);
             for (UC i = ZERO; i < uc(count); i = i + ONE) {
-                ActionInfo memory ai = infos[infos.length - (uc(start) + i + ONE).into()];
+                uint oldest = hs.actionInfos[user].length - (uc(start) + i + ONE).into();
+                ActionInfo memory ai = hs.actionInfos[user][oldest];
                 OrderInfo memory oi = hs.orderInfos[ai.hash];
                 string memory name = IPairsManager(address(this)).getPairForTrading(oi.pairBase).name;
                 if (ai.actionType == ActionType.LIMIT || ai.actionType == ActionType.CANCEL_LIMIT || ai.actionType == ActionType.SYSTEM_CANCEL) {

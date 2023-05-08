@@ -46,7 +46,7 @@ contract AlpManagerFacet is ReentrancyGuard, Pausable, IAlpManager {
         require(amount > 0, "AlpManagerFacet: invalid amount");
         address account = msg.sender;
         uint256 alpAmount = LibAlpManager.mintAlp(account, tokenIn, amount);
-        require(alpAmount >= minAlp, "LibLiquidity: insufficient ALP output");
+        require(alpAmount >= minAlp, "AlpManagerFacet: insufficient ALP output");
         _mint(account, tokenIn, amount, alpAmount, stake);
     }
 
@@ -55,7 +55,7 @@ contract AlpManagerFacet is ReentrancyGuard, Pausable, IAlpManager {
         require(amount > 0, "AlpManagerFacet: invalid msg.value");
         address account = msg.sender;
         uint256 alpAmount = LibAlpManager.mintAlpBNB(account, amount);
-        require(alpAmount >= minAlp, "LibLiquidity: insufficient ALP output");
+        require(alpAmount >= minAlp, "AlpManagerFacet: insufficient ALP output");
         _mint(account, LibVault.WBNB(), amount, alpAmount, stake);
     }
 
@@ -71,7 +71,7 @@ contract AlpManagerFacet is ReentrancyGuard, Pausable, IAlpManager {
         require(alpAmount > 0, "AlpManagerFacet: invalid alpAmount");
         address account = msg.sender;
         uint256 amountOut = LibAlpManager.burnAlp(account, tokenOut, alpAmount, receiver);
-        require(amountOut >= minOut, "LibLiquidity: insufficient token output");
+        require(amountOut >= minOut, "AlpManagerFacet: insufficient token output");
         IAlp(ALP()).burnFrom(account, alpAmount);
         emit BurnAlp(account, receiver, tokenOut, alpAmount, amountOut);
     }
@@ -80,7 +80,7 @@ contract AlpManagerFacet is ReentrancyGuard, Pausable, IAlpManager {
         require(alpAmount > 0, "AlpManagerFacet: invalid alpAmount");
         address account = msg.sender;
         uint256 amountOut = LibAlpManager.burnAlpBNB(account, alpAmount, receiver);
-        require(amountOut >= minOut, "LibLiquidity: insufficient BNB output");
+        require(amountOut >= minOut, "AlpManagerFacet: insufficient BNB output");
         IAlp(ALP()).burnFrom(account, alpAmount);
         emit BurnAlp(account, receiver, LibVault.WBNB(), alpAmount, amountOut);
     }

@@ -55,15 +55,15 @@ interface IOrderAndTradeHistory {
         int96 pnl;                 // tokenIn decimals
     }
 
-    function createLimitOrder(bytes32 orderHash, OrderInfo memory) external;
+    function createLimitOrder(bytes32 orderHash, OrderInfo calldata) external;
 
     function cancelLimitOrder(bytes32 orderHash, ActionType aType) external;
 
-    function limitTrade(bytes32 tradeHash, TradeInfo memory) external;
+    function limitTrade(bytes32 tradeHash, TradeInfo calldata) external;
 
-    function marketTrade(bytes32 tradeHash, OrderInfo memory, TradeInfo memory) external;
+    function marketTrade(bytes32 tradeHash, OrderInfo calldata, TradeInfo calldata) external;
 
-    function closeTrade(bytes32 tradeHash, CloseInfo memory, ActionType aType) external;
+    function closeTrade(bytes32 tradeHash, CloseInfo calldata, ActionType aType) external;
 
     function updateMargin(bytes32 tradeHash, uint96 newMargin) external;
 

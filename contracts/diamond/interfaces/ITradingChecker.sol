@@ -19,23 +19,23 @@ interface ITradingChecker {
 
     function checkSl(bool isLong, uint stopLoss, uint entryPrice) external pure returns (bool);
 
-    function checkLimitOrderTp(ILimitOrder.LimitOrder memory order) external view;
+    function checkLimitOrderTp(ILimitOrder.LimitOrder calldata order) external view;
 
     function openLimitOrderCheck(IBook.OpenDataInput calldata data) external view;
 
     function executeLimitOrderCheck(
-        ILimitOrder.LimitOrder memory order, uint256 marketPrice
+        ILimitOrder.LimitOrder calldata order, uint256 marketPrice
     ) external view returns (bool result, uint96 openFee, uint96 executionFee, Refund refund);
 
-    function checkMarketTradeTp(ITrading.OpenTrade memory) external view;
+    function checkMarketTradeTp(ITrading.OpenTrade calldata) external view;
 
     function openMarketTradeCheck(IBook.OpenDataInput calldata data) external view;
 
     function marketTradeCallbackCheck(
-        ITrading.PendingTrade memory pt, uint256 marketPrice
+        ITrading.PendingTrade calldata pt, uint256 marketPrice
     ) external view returns (bool result, uint96 openFee, uint96 executionFee, uint256 entryPrice, Refund refund);
 
     function executeLiquidateCheck(
-        ITrading.OpenTrade memory ot, uint256 marketPrice, uint256 closePrice 
+        ITrading.OpenTrade calldata ot, uint256 marketPrice, uint256 closePrice 
     ) external view returns (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee);
 }

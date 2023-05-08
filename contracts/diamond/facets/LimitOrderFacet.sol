@@ -30,7 +30,7 @@ contract LimitOrderFacet is ILimitOrder {
     function updateOrderSl(bytes32 orderHash, uint64 stopLoss) public override {
         LimitOrder storage order = LibLimitOrder.limitOrderStorage().limitOrders[orderHash];
         LibLimitOrder.check(order);
-        require(ITradingChecker(address(this)).checkSl(order.isLong, stopLoss, order.limitPrice), "LimitBookFacet: stopLoss is not in the valid range");
+        require(ITradingChecker(address(this)).checkSl(order.isLong, stopLoss, order.limitPrice), "LimitOrderFacet: stopLoss is not in the valid range");
         uint256 oldSl = order.stopLoss;
         order.stopLoss = stopLoss;
 
@@ -46,12 +46,12 @@ contract LimitOrderFacet is ILimitOrder {
 
     function executeLimitOrder(KeeperExecution[] memory executeOrders) external override {
         LibAccessControlEnumerable.checkRole(Constants.KEEPER_ROLE);
-        require(executeOrders.length > 0, "LimitBookFacet: Parameters are empty");
+        require(executeOrders.length > 0, "LimitOrderFacet: Parameters are empty");
         LibLimitOrder.LimitOrderStorage storage los = LibLimitOrder.limitOrderStorage();
         for (UC i = ZERO; i < uc(executeOrders.length); i = i + ONE) {
             KeeperExecution memory ke = executeOrders[i.into()];
             LimitOrder memory order = los.limitOrders[ke.hash];
-            require(order.amountIn > 0, "LimitBookFacet: Order does not exist");
+            require(order.amountIn > 0, "LimitOrderFacet: Order does not exist");
             (bool available, uint64 upper, uint64 lower) = IPriceFacade(address(this)).confirmTriggerPrice(order.pairBase, ke.price);
             if (!available) {
                 emit ExecuteLimitOrderRejected(order.user, ke.hash, ITradingChecker.Refund.SYSTEM);

@@ -119,9 +119,9 @@ library LibFeeManager {
         uint256 daoShare = feeAmount * fms.daoShareP / 1e4;
         if (daoShare > 0) {
             IERC20(token).safeTransfer(fms.daoRepurchase, daoShare);
-            detail.total += feeAmount;
             detail.daoAmount += daoShare;
         }
+        detail.total += feeAmount;
         (uint256 commission, uint24 brokerId) = LibBrokerManager.updateBrokerCommission(token, feeAmount, broker);
         detail.brokerAmount += commission;
 
@@ -138,9 +138,9 @@ library LibFeeManager {
         uint256 daoShare = feeAmount * fms.daoShareP / 1e4;
         if (daoShare > 0) {
             IERC20(token).safeTransfer(fms.daoRepurchase, daoShare);
-            detail.total += feeAmount;
             detail.daoAmount += daoShare;
         }
+        detail.total += feeAmount;
         (uint256 commission, uint24 brokerId) = LibBrokerManager.updateBrokerCommission(token, feeAmount, broker);
         detail.brokerAmount += commission;
 

@@ -76,7 +76,7 @@ library LibVault {
 
     function addToken(
         address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool stable,
-        bool dynamicFee, bool asMargin, uint16[] memory weights
+        bool dynamicFee, bool asMargin, uint16[] calldata weights
     ) internal {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
@@ -98,7 +98,7 @@ library LibVault {
         changeWeight(weights);
     }
 
-    function removeToken(address tokenAddress, uint16[] memory weights) internal {
+    function removeToken(address tokenAddress, uint16[] calldata weights) internal {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
         require(at.tokenAddress != address(0), "LibVault: Token does not exist");
@@ -139,7 +139,7 @@ library LibVault {
         emit SupportTokenAsMargin(tokenAddress, asMargin);
     }
 
-    function changeWeight(uint16[] memory weights) internal {
+    function changeWeight(uint16[] calldata weights) internal {
         VaultStorage storage vs = vaultStorage();
         require(weights.length == vs.tokenAddresses.length, "LibVault: Invalid weights");
         uint16 totalWeight;

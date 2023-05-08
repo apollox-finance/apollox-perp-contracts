@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "../libraries/LibAccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/utils/introspection/IERC165.sol";
 import "@openzeppelin/contracts/utils/structs/EnumerableSet.sol";
 import "@openzeppelin/contracts/access/IAccessControlEnumerable.sol";
-import "../libraries/LibAccessControlEnumerable.sol";
 
-contract AccessControlEnumerableFacet is IAccessControlEnumerable, IERC165 {
+contract AccessControlEnumerableFacet is IAccessControlEnumerable {
     using EnumerableSet for EnumerableSet.AddressSet;
 
     function hasRole(bytes32 role, address account) external view override returns (bool) {
@@ -42,10 +41,5 @@ contract AccessControlEnumerableFacet is IAccessControlEnumerable, IERC165 {
     function getRoleMemberCount(bytes32 role) external view override returns (uint256) {
         LibAccessControlEnumerable.AccessControlStorage storage acs = LibAccessControlEnumerable.accessControlStorage();
         return acs.roleMembers[role].length();
-    }
-
-    function supportsInterface(bytes4 interfaceId) external view override returns (bool) {
-        LibAccessControlEnumerable.AccessControlStorage storage acs = LibAccessControlEnumerable.accessControlStorage();
-        return acs.supportedInterfaces[interfaceId];
     }
 }

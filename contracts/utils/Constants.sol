@@ -41,7 +41,7 @@ library Constants {
     uint16 constant public MAX_DAO_SHARE_P = 5000;
     uint16 constant public MAX_COMMISSION_P = 5000;
     uint8 constant public FEED_DELAY_BLOCK = 10;
+    uint8 constant public MAX_REQUESTS_PER_PAIR_IN_BLOCK = 100;
     uint256 constant public TIME_LOCK_DELAY = 2 hours;
     uint256 constant public TIME_LOCK_GRACE_PERIOD = 12 hours;
-
 }

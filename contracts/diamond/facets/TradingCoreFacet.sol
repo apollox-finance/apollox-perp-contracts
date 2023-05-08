@@ -35,15 +35,15 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         if (isLong) {
             uint slippage = sc.slippageLongP;
             if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-                // slippage = (longQty + qty) * price / depthAboveUsd
-                slippage = (pairQty.longQty + qty) * marketPrice * 1e4 / sc.onePercentDepthAboveUsd;
+                // slippage = (longQty + qty) * price / depthAboveUsd + 1
+                slippage = (pairQty.longQty + qty) * marketPrice * 1e4 / sc.onePercentDepthAboveUsd + 1;
             }
             return marketPrice * (1e4 + slippage) / 1e4;
         } else {
             uint slippage = sc.slippageShortP;
             if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-                // slippage = (shortQty + qty) * price / depthBelowUsd
-                slippage = (pairQty.shortQty + qty) * marketPrice * 1e4 / sc.onePercentDepthBelowUsd;
+                // slippage = (shortQty + qty) * price / depthBelowUsd + 1
+                slippage = (pairQty.shortQty + qty) * marketPrice * 1e4 / sc.onePercentDepthBelowUsd + 1;
             }
             return marketPrice * (1e4 - slippage) / 1e4;
         }
@@ -64,15 +64,15 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         if (isLong) {
             uint slippage = sc.slippageLongP;
             if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-                // slippage = (longQty + qty) * price / depthAboveUsd
-                slippage = (pairQty.longQty + qty) * limitPrice * 1e4 / sc.onePercentDepthAboveUsd;
+                // slippage = (longQty + qty) * price / depthAboveUsd  + 1
+                slippage = (pairQty.longQty + qty) * limitPrice * 1e4 / sc.onePercentDepthAboveUsd + 1;
             }
             return limitPrice * (1e4 - slippage) / 1e4;
         } else {
             uint slippage = sc.slippageShortP;
             if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-                // slippage = (shortQty + qty) * price / depthBelowUsd
-                slippage = (pairQty.shortQty + qty) * limitPrice * 1e4 / sc.onePercentDepthBelowUsd;
+                // slippage = (shortQty + qty) * price / depthBelowUsd + 1
+                slippage = (pairQty.shortQty + qty) * limitPrice * 1e4 / sc.onePercentDepthBelowUsd + 1;
             }
             return limitPrice * (1e4 + slippage) / 1e4;
         }

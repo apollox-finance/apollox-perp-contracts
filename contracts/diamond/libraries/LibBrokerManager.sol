@@ -86,6 +86,7 @@ library LibBrokerManager {
 
     function removeBroker(uint24 id) internal {
         BrokerManagerStorage storage bms = brokerManagerStorage();
+        require(id != bms.defaultBroker, "LibBrokerManager: Default broker cannot be removed.");
         withdrawCommission(id);
 
         uint24[] storage brokerIds = bms.brokerIds;
@@ -141,10 +142,11 @@ library LibBrokerManager {
         for (UC i = ZERO; i < uc(tokens.length); i = i + ONE) {
             Commission storage c = bms.brokerCommissions[id][tokens[i.into()]];
             if (c.pending > 0) {
-                IERC20(tokens[i.into()]).safeTransfer(b.receiver, c.pending);
-                emit WithdrawBrokerCommission(id, tokens[i.into()], operator, c.pending);
-                bms.allPendingCommissions[tokens[i.into()]] -= c.pending;
+                uint256 pending = c.pending;
                 c.pending = 0;
+                bms.allPendingCommissions[tokens[i.into()]] -= pending;
+                IERC20(tokens[i.into()]).safeTransfer(b.receiver, pending);
+                emit WithdrawBrokerCommission(id, tokens[i.into()], operator, pending);
             }
         }
     }
