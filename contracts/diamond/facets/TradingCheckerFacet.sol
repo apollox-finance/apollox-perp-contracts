@@ -200,7 +200,7 @@ contract TradingCheckerFacet is ITradingChecker {
                 return (false, 0, 0, Refund.OPEN_LOST);
             }
         } else {
-            // Comparison of the values of price and limitPrice + slippege
+            // Comparison of the values of price and limitPrice + slippage
             if (marketPrice < tuple.triggerPrice) {
                 return (false, 0, 0, Refund.USER_PRICE);
             }
