@@ -30,7 +30,7 @@ contract LimitOrderFacet is ILimitOrder {
     function updateOrderSl(bytes32 orderHash, uint64 stopLoss) public override {
         LimitOrder storage order = LibLimitOrder.limitOrderStorage().limitOrders[orderHash];
         LibLimitOrder.check(order);
-        require(ITradingChecker(address(this)).checkSl(order.isLong, stopLoss, order.limitPrice), "LimitBookFacet: stopLoss is not in the valid range");
+        require(ITradingChecker(address(this)).checkSl(order.isLong, stopLoss, order.limitPrice), "LimitOrderFacet: stopLoss is not in the valid range");
         uint256 oldSl = order.stopLoss;
         order.stopLoss = stopLoss;
 
