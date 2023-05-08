@@ -44,5 +44,4 @@ library Constants {
     uint8 constant public MAX_REQUESTS_PER_PAIR_IN_BLOCK = 100;
     uint256 constant public TIME_LOCK_DELAY = 2 hours;
     uint256 constant public TIME_LOCK_GRACE_PERIOD = 12 hours;
-
 }
