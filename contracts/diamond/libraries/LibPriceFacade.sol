@@ -166,7 +166,7 @@ library LibPriceFacade {
     function getPriceFromCacheOrOracle(PriceFacadeStorage storage pfs, address token) internal view returns (uint64, uint40) {
         LatestCallbackPrice memory cachePrice = pfs.callbackPrices[token];
         (uint256 price, uint8 decimals, uint256 oracleUpdatedAt) = LibChainlinkPrice.getPriceFromChainlink(token);
-        require(price <= type(uint64).max, "LibPriceFacade: Invalid price");
+        require(price <= type(uint64).max && price * 1e8 / (10 ** decimals) <= type(uint64).max, "LibPriceFacade: Invalid price");
         uint40 updatedAt = cachePrice.timestamp >= oracleUpdatedAt ? cachePrice.timestamp : uint40(oracleUpdatedAt);
         // Take the newer price
         uint64 tokenPrice = cachePrice.timestamp >= oracleUpdatedAt ? cachePrice.price :
