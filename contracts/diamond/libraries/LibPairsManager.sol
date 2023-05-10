@@ -314,6 +314,7 @@ library LibPairsManager {
         uint lastPositionSlippage = oldSlippagePairs.length - 1;
         uint oldSlippagePosition = pair.slippagePosition;
         if (oldSlippagePosition != lastPositionSlippage) {
+            pms.pairs[oldSlippagePairs[lastPositionSlippage]].slippagePosition = uint16(oldSlippagePosition);
             oldSlippagePairs[oldSlippagePosition] = oldSlippagePairs[lastPositionSlippage];
         }
         oldSlippagePairs.pop();
@@ -337,6 +338,7 @@ library LibPairsManager {
         uint lastPositionFee = oldFeePairs.length - 1;
         uint oldFeePosition = pair.feePosition;
         if (oldFeePosition != lastPositionFee) {
+            pms.pairs[oldFeePairs[lastPositionFee]].feePosition = uint16(oldFeePosition);
             oldFeePairs[oldFeePosition] = oldFeePairs[lastPositionFee];
         }
         oldFeePairs.pop();
