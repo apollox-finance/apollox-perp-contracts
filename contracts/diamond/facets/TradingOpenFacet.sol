@@ -26,7 +26,8 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
         OpenTrade memory ot = OpenTrade(
             order.user, uint32(tradeHashes.length), order.entryPrice, order.pairBase, order.tokenIn,
             order.margin, order.stopLoss, order.takeProfit, broker, order.isLong, order.openFee,
-            longAccFundingFeePerShare, order.executionFee, uint40(block.timestamp), order.qty
+            longAccFundingFeePerShare, order.executionFee, uint40(block.timestamp), order.qty,
+            IPairsManager(address(this)).getPairHoldingFeeRate(order.pairBase, order.isLong), block.number
         );
         ts.openTrades[order.orderHash] = ot;
         tradeHashes.push(order.orderHash);
@@ -37,7 +38,7 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
     function _limitTrade(bytes32 tradeHash, OpenTrade memory ot) private {
         IOrderAndTradeHistory(address(this)).limitTrade(
             tradeHash,
-            IOrderAndTradeHistory.TradeInfo(ot.margin, ot.openFee, ot.executionFee)
+            IOrderAndTradeHistory.TradeInfo(ot.margin, ot.openFee, ot.executionFee, uint40(block.timestamp))
         );
     }
 
@@ -45,7 +46,7 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
         IOrderAndTradeHistory(address(this)).marketTrade(
             tradeHash,
             IOrderAndTradeHistory.OrderInfo(ot.user, ot.margin + ot.openFee + ot.executionFee, ot.tokenIn, ot.qty, ot.isLong, ot.pairBase, ot.entryPrice),
-            IOrderAndTradeHistory.TradeInfo(ot.margin, ot.openFee, ot.executionFee)
+            IOrderAndTradeHistory.TradeInfo(ot.margin, ot.openFee, ot.executionFee, uint40(block.timestamp))
         );
     }
 
@@ -79,7 +80,8 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
         bytes32[] storage tradeHashes = ts.userOpenTradeHashes[pt.user];
         OpenTrade memory ot = OpenTrade(
             pt.user, uint32(tradeHashes.length), uint64(entryPrice), pt.pairBase, pt.tokenIn, margin, pt.stopLoss,
-            pt.takeProfit, broker, pt.isLong, openFee, longAccFundingFeePerShare, executionFee, uint40(block.timestamp), pt.qty
+            pt.takeProfit, broker, pt.isLong, openFee, longAccFundingFeePerShare, executionFee, uint40(block.timestamp),
+            pt.qty, IPairsManager(address(this)).getPairHoldingFeeRate(pt.pairBase, pt.isLong), block.number
         );
         ts.openTrades[tradeHash] = ot;
         tradeHashes.push(tradeHash);

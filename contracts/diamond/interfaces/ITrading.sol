@@ -33,6 +33,9 @@ interface ITrading {
         uint96 executionFee;   // tokenIn decimals
         uint40 timestamp;
         uint80 qty;            // 1e10
+
+        uint40 holdingFeeRate; // 1e12
+        uint256 openBlock;
     }
 
     struct MarginBalance {

@@ -10,6 +10,7 @@ import "../interfaces/ITradingChecker.sol";
 import "../interfaces/IOrderAndTradeHistory.sol";
 import "../libraries/LibTrading.sol";
 import "../libraries/LibAccessControlEnumerable.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SignedMath.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -25,6 +26,11 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         uint256 marketPrice = ot.isLong ? lowerPrice : upperPrice;
         uint256 closePrice = ITradingCore(address(this)).slippagePrice(ot.pairBase, marketPrice, ot.qty, !ot.isLong);
 
+        if (!ITradingChecker(address(this)).checkProtectionPrice(ot.pairBase, closePrice, !ot.isLong)) {
+            emit CloseRejectedByProtectionPrice(ot.user, tradeHash, closePrice);
+            return;
+        }
+
         IOrderAndTradeHistory.CloseInfo memory closeInfo = _closeTrade(ts, ot, tradeHash, marketPrice, closePrice);
         _saveCloseTradeHistory(tradeHash, closeInfo, IOrderAndTradeHistory.ActionType.CLOSE);
         emit CloseTradeSuccessful(ot.user, tradeHash, closeInfo);
@@ -38,19 +44,20 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         int256 longAccFundingFeePerShare = ITradingCore(address(this)).updatePairPositionInfo(ot.pairBase, ot.entryPrice, marketPrice, ot.qty, ot.isLong, false);
         IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(ot.tokenIn);
         int256 fundingFee = LibTrading.calcFundingFee(ot, mt, marketPrice, longAccFundingFeePerShare);
+        uint256 holdingFee = LibTrading.calcHoldingFee(ot, mt);
         uint256 closeNotionalUsd = closePrice * ot.qty;
         int256 pnl;
         if (ot.isLong) {
-            pnl = (int256(closeNotionalUsd) - int256(uint256(ot.entryPrice * ot.qty))) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
+            pnl = (int256(closeNotionalUsd) - int256(uint256(ot.entryPrice) * ot.qty)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         } else {
-            pnl = (int256(uint256(ot.entryPrice * ot.qty)) - int256(closeNotionalUsd)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
+            pnl = (int256(uint256(ot.entryPrice) * ot.qty) - int256(closeNotionalUsd)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         }
-        uint16 closeFeeP = IPairsManager(address(this)).getPairFeeConfig(ot.pairBase).closeFeeP;
-        uint256 closeFee = closeNotionalUsd * closeFeeP * (10 ** mt.decimals) / (1e4 * 1e10 * mt.price);
+        uint256 closeFee = closeNotionalUsd * IPairsManager(address(this)).getPairFeeConfig(ot.pairBase).closeFeeP * (10 ** mt.decimals) / (1e4 * 1e10 * mt.price);
+        (closeFee, holdingFee) = _settleForCloseTrade(ts, ot, tradeHash, pnl, fundingFee, closeFee, holdingFee);
 
-        closeFee = _settleForCloseTrade(ts, ot, tradeHash, pnl, fundingFee, closeFee);
-
-        return IOrderAndTradeHistory.CloseInfo(uint64(closePrice), int96(fundingFee), uint96(closeFee), int96(pnl));
+        return IOrderAndTradeHistory.CloseInfo(
+            uint64(closePrice), int96(fundingFee), uint96(closeFee), int96(pnl), uint96(holdingFee)
+        );
     }
 
     function _saveCloseTradeHistory(bytes32 tradeHash, IOrderAndTradeHistory.CloseInfo memory ci, IOrderAndTradeHistory.ActionType aType) private {
@@ -59,8 +66,8 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
 
     function _settleForCloseTrade(
         LibTrading.TradingStorage storage ts, ITrading.OpenTrade memory ot,
-        bytes32 tradeHash, int256 pnl, int256 fundingFee, uint256 closeFee
-    ) internal returns(uint256) {
+        bytes32 tradeHash, int256 pnl, int256 fundingFee, uint256 closeFee, uint256 holdingFee
+    ) private returns (uint256, uint256) {
         // openTradeReceive + closeFee + userReceive + lpReceive == 0
         // closeFee >= 0 && userReceive >= 0
         int256 openTradeReceive = - int256(uint256(ot.margin)) - fundingFee;
@@ -68,17 +75,25 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         int256 lpReceive;
         if (- openTradeReceive + pnl >= int256(closeFee)) {
             userReceive = uint256(- openTradeReceive + pnl) - closeFee;
-            lpReceive = - pnl;
+            if (userReceive > holdingFee) {
+                userReceive -= holdingFee;
+            } else {
+                holdingFee = userReceive;
+                userReceive = 0;
+            }
+            lpReceive = - pnl + int256(holdingFee);
         } else if (- openTradeReceive + pnl > 0 && - openTradeReceive + pnl < int256(closeFee)) {
             closeFee = uint256(- openTradeReceive + pnl);
             lpReceive = - pnl;
+            holdingFee = 0;
         } else {
             lpReceive = - openTradeReceive;
             closeFee = 0;
+            holdingFee = 0;
         }
 
         _settleAsset(ts, SettleAssetTuple(ot, tradeHash, openTradeReceive, closeFee, userReceive, lpReceive));
-        return closeFee;
+        return (closeFee, holdingFee);
     }
 
     struct SettleAssetTuple {
@@ -95,7 +110,17 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
             ITradingClose.SettleToken[] memory openTradeSettleTokens = _decreaseByCloseTrade(ts, tuple.ot.tokenIn, tuple.openTradeReceive.abs());
             if (tuple.lpReceive < 0) {// |openTradeReceive + lpReceive| = userReceive + closeFee
                 ITradingClose.SettleToken[] memory lpSettleTokens = IVault(address(this)).decreaseByCloseTrade(tuple.ot.tokenIn, tuple.lpReceive.abs());
-                require(openTradeSettleTokens[0].amount + lpSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
+                require(
+                    openTradeSettleTokens[0].amount + lpSettleTokens[0].amount >= tuple.closeFee,
+                    string(
+                        abi.encodePacked(
+                            "TradingCloseFacet: [L&O] insufficient ", Strings.toHexString(tuple.ot.tokenIn),
+                            ", O ", Strings.toString(openTradeSettleTokens[0].amount),
+                            ", L ", Strings.toString(lpSettleTokens[0].amount),
+                            ", F ", Strings.toString(tuple.closeFee)
+                        )
+                    )
+                );
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -107,7 +132,16 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                     _transferToUserForClose(tuple.tradeHash, tuple.ot.user, openTradeSettleTokens);
                 }
             } else if (tuple.lpReceive == 0) {// |openTradeReceive| = userReceive + closeFee
-                require(openTradeSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
+                require(
+                    openTradeSettleTokens[0].amount >= tuple.closeFee,
+                    string(
+                        abi.encodePacked(
+                            "TradingCloseFacet: [O] insufficient ", Strings.toHexString(tuple.ot.tokenIn),
+                            ", O ", Strings.toString(openTradeSettleTokens[0].amount),
+                            ", F ", Strings.toString(tuple.closeFee)
+                        )
+                    )
+                );
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -116,7 +150,16 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                     _transferToUserForClose(tuple.tradeHash, tuple.ot.user, openTradeSettleTokens);
                 }
             } else {// |openTradeReceive| = userReceive + closeFee + lpReceive
-                require(openTradeSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
+                require(
+                    openTradeSettleTokens[0].amount >= tuple.closeFee,
+                    string(
+                        abi.encodePacked(
+                            "TradingCloseFacet: [O] insufficient ", Strings.toHexString(tuple.ot.tokenIn),
+                            ", F ", Strings.toString(tuple.closeFee),
+                            ", O ", Strings.toString(openTradeSettleTokens[0].amount)
+                        )
+                    )
+                );
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -126,7 +169,16 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         } else if (tuple.openTradeReceive == 0) {
             if (tuple.lpReceive < 0) {// |lpReceive| = userReceive + closeFee
                 ITradingClose.SettleToken[] memory lpSettleTokens = IVault(address(this)).decreaseByCloseTrade(tuple.ot.tokenIn, tuple.lpReceive.abs());
-                require(lpSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
+                require(
+                    lpSettleTokens[0].amount >= tuple.closeFee,
+                    string(
+                        abi.encodePacked(
+                            "TradingCloseFacet: [L] insufficient ", Strings.toHexString(tuple.ot.tokenIn),
+                            ", L ", Strings.toString(lpSettleTokens[0].amount),
+                            ", F ", Strings.toString(tuple.closeFee)
+                        )
+                    )
+                );
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -138,7 +190,16 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         } else {
             if (tuple.lpReceive < 0) {// |lpReceive| = userReceive + closeFee + openTradeReceive
                 ITradingClose.SettleToken[] memory lpSettleTokens = IVault(address(this)).decreaseByCloseTrade(tuple.ot.tokenIn, tuple.lpReceive.abs());
-                require(lpSettleTokens[0].amount >= tuple.closeFee, "TradingCloseFacet: Target token insufficient funds");
+                require(
+                    lpSettleTokens[0].amount >= tuple.closeFee,
+                    string(
+                        abi.encodePacked(
+                            "TradingCloseFacet: [L] insufficient ", Strings.toHexString(tuple.ot.tokenIn),
+                            ", F ", Strings.toString(tuple.closeFee),
+                            ", L ", Strings.toString(lpSettleTokens[0].amount)
+                        )
+                    )
+                );
                 if (tuple.closeFee > 0) {
                     IFeeManager(address(this)).chargeCloseFee(tuple.ot.tokenIn, tuple.closeFee, tuple.ot.broker);
                 }
@@ -287,6 +348,12 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
             }
             uint64 marketPrice = ot.isLong ? lower : upper;
             uint256 closePrice = ITradingCore(address(this)).slippagePrice(ot.pairBase, marketPrice, ot.qty, !ot.isLong);
+
+            if (!ITradingChecker(address(this)).checkProtectionPrice(ot.pairBase, closePrice, !ot.isLong)) {
+                emit CloseRejectedByProtectionPrice(ot.user, t.tradeHash, closePrice);
+                continue;
+            }
+
             if (t.executionType == ExecutionType.TP) {
                 if ((ot.isLong && marketPrice < ot.takeProfit) || (!ot.isLong && marketPrice > ot.takeProfit)) {
                     emit ExecuteCloseRejected(ot.user, t.tradeHash, t.executionType, t.price, marketPrice);
@@ -300,13 +367,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                 }
                 _executeSl(ts, ot, t.tradeHash, marketPrice, closePrice);
             } else {
-                (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee) = ITradingChecker(address(this)).executeLiquidateCheck(ot, marketPrice, closePrice);
-                if (!needLiq) {
-                    emit ExecuteCloseRejected(ot.user, t.tradeHash, ExecutionType.LIQ, t.price, marketPrice);
-                    continue;
-                }
-                ITradingCore(address(this)).updatePairPositionInfo(ot.pairBase, ot.entryPrice, marketPrice, ot.qty, ot.isLong, false);
-                _executeLiquidate(ts, ot, t.tradeHash, closePrice, pnl, fundingFee, closeFee);
+                _executeLiq(ts, ot, t, marketPrice, closePrice);
             }
         }
     }
@@ -331,22 +392,32 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         _removeOpenTrade(ts, ot, tradeHash);
     }
 
-    function _executeLiquidate(
+    function _executeLiq(
         LibTrading.TradingStorage storage ts, ITrading.OpenTrade storage ot,
-        bytes32 tradeHash, uint256 liqPrice, int256 pnl, int256 fundingFee, uint256 closeFee
+        TpSlOrLiq memory t, uint64 marketPrice, uint256 closePrice
     ) private {
-        closeFee = _settleForLiqTrade(ts, ot, tradeHash, pnl, fundingFee, closeFee);
+        (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee, uint256 holdingFee) =
+        ITradingChecker(address(this)).executeLiquidateCheck(ot, marketPrice, closePrice);
+        if (!needLiq) {
+            emit ExecuteCloseRejected(ot.user, t.tradeHash, ExecutionType.LIQ, t.price, marketPrice);
+            return;
+        }
 
-        IOrderAndTradeHistory.CloseInfo memory closeInfo = IOrderAndTradeHistory.CloseInfo(uint64(liqPrice), int96(fundingFee), uint96(closeFee), int96(pnl));
-        _saveCloseTradeHistory(tradeHash, closeInfo, IOrderAndTradeHistory.ActionType.LIQUIDATED);
-        emit ExecuteCloseSuccessful(ot.user, tradeHash, ExecutionType.LIQ, closeInfo);
-        _removeOpenTrade(ts, ot, tradeHash);
+        ITradingCore(address(this)).updatePairPositionInfo(ot.pairBase, ot.entryPrice, marketPrice, ot.qty, ot.isLong, false);
+        (closeFee, holdingFee) = _settleForLiqTrade(ts, ot, t.tradeHash, pnl, fundingFee, closeFee, holdingFee);
+
+        IOrderAndTradeHistory.CloseInfo memory closeInfo = IOrderAndTradeHistory.CloseInfo(
+            uint64(closePrice), int96(fundingFee), uint96(closeFee), int96(pnl), uint96(holdingFee)
+        );
+        _saveCloseTradeHistory(t.tradeHash, closeInfo, IOrderAndTradeHistory.ActionType.LIQUIDATED);
+        emit ExecuteCloseSuccessful(ot.user, t.tradeHash, ExecutionType.LIQ, closeInfo);
+        _removeOpenTrade(ts, ot, t.tradeHash);
     }
 
     function _settleForLiqTrade(
         LibTrading.TradingStorage storage ts, ITrading.OpenTrade memory ot,
-        bytes32 tradeHash, int256 pnl, int256 fundingFee, uint256 closeFee
-    ) private returns (uint256) {
+        bytes32 tradeHash, int256 pnl, int256 fundingFee, uint256 closeFee, uint256 holdingFee
+    ) private returns (uint256, uint256) {
         // userReceive = 0
         // openTradeReceive + closeFee + lpReceive == 0
         // closeFee >= 0
@@ -359,17 +430,20 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         } else if (- openTradeReceive + pnl > 0 && - openTradeReceive + pnl < int256(closeFee)) {
             closeFee = uint256(- openTradeReceive + pnl);
             lpReceive = - pnl;
+            holdingFee = 0;
         } else {
             lpReceive = - openTradeReceive;
             closeFee = 0;
+            holdingFee = 0;
         }
         // The user's position is covered by the LP, and any excess funds are held by the LP upon liquidation
         if (userReceive > 0) {
+            holdingFee = userReceive < holdingFee ? userReceive : holdingFee;
             lpReceive += int256(userReceive);
             userReceive = 0;
         }
         _settleAsset(ts, SettleAssetTuple(ot, tradeHash, openTradeReceive, closeFee, userReceive, lpReceive));
-        return closeFee;
+        return (closeFee, holdingFee);
     }
 
 

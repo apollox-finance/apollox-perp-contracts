@@ -5,6 +5,7 @@ import "../security/OnlySelf.sol";
 import "../interfaces/ITradingCore.sol";
 import "../interfaces/IPairsManager.sol";
 import "../interfaces/ITradingPortal.sol";
+import "../interfaces/ISlippageManager.sol";
 import "../libraries/LibTrading.sol";
 import "../libraries/LibTradingCore.sol";
 import "../libraries/LibAccessControlEnumerable.sol";
@@ -29,21 +30,29 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
 
     function slippagePrice(
         PairQty memory pairQty,
-        IPairsManager.SlippageConfig memory sc,
+        ISlippageManager.SlippageConfig memory sc,
         uint256 marketPrice, uint256 qty, bool isLong
     ) public pure override returns (uint256) {
         if (isLong) {
             uint slippage = sc.slippageLongP;
-            if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-                // slippage = (longQty + qty) * price / depthAboveUsd + 1
+            if (sc.slippageType == ISlippageManager.SlippageType.ONE_PERCENT_DEPTH) {
+                // slippage = (longQty + qty) * price / depthAboveUsd
                 slippage = (pairQty.longQty + qty) * marketPrice * 1e4 / sc.onePercentDepthAboveUsd + 1;
+            } else if (sc.slippageType == ISlippageManager.SlippageType.NET_POSITION && pairQty.longQty + qty >= pairQty.shortQty) {
+                // slippage = max((longQty + qty - shortQty) * price / depthAboveUsd + 1, slippageLongP)
+                uint256 s = (pairQty.longQty + qty - pairQty.shortQty) * marketPrice * 1e4 / sc.onePercentDepthAboveUsd + 1;
+                slippage = s > sc.slippageLongP ? s : sc.slippageLongP;
             }
             return marketPrice * (1e4 + slippage) / 1e4;
         } else {
             uint slippage = sc.slippageShortP;
-            if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-                // slippage = (shortQty + qty) * price / depthBelowUsd + 1
+            if (sc.slippageType == ISlippageManager.SlippageType.ONE_PERCENT_DEPTH) {
+                // slippage = (shortQty + qty) * price / depthBelowUsd
                 slippage = (pairQty.shortQty + qty) * marketPrice * 1e4 / sc.onePercentDepthBelowUsd + 1;
+            } else if (sc.slippageType == ISlippageManager.SlippageType.NET_POSITION && pairQty.shortQty + qty >= pairQty.longQty) {
+                // slippage = max((shortQty + qty - longQty) * price / depthAboveUsd + 1, slippageLongP)
+                uint256 s = (pairQty.shortQty + qty - pairQty.longQty) * marketPrice * 1e4 / sc.onePercentDepthBelowUsd + 1;
+                slippage = s > sc.slippageShortP ? s : sc.slippageShortP;
             }
             return marketPrice * (1e4 - slippage) / 1e4;
         }
@@ -58,21 +67,29 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
 
     function triggerPrice(
         PairQty memory pairQty,
-        IPairsManager.SlippageConfig memory sc,
+        ISlippageManager.SlippageConfig memory sc,
         uint256 limitPrice, uint256 qty, bool isLong
     ) public pure override returns (uint256) {
         if (isLong) {
             uint slippage = sc.slippageLongP;
-            if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-                // slippage = (longQty + qty) * price / depthAboveUsd  + 1
+            if (sc.slippageType == ISlippageManager.SlippageType.ONE_PERCENT_DEPTH) {
+                // slippage = (longQty + qty) * price / depthAboveUsd
                 slippage = (pairQty.longQty + qty) * limitPrice * 1e4 / sc.onePercentDepthAboveUsd + 1;
+            } else if (sc.slippageType == ISlippageManager.SlippageType.NET_POSITION && pairQty.longQty + qty >= pairQty.shortQty) {
+                // slippage = max((longQty + qty - shortQty) * price / depthAboveUsd + 1, slippageLongP)
+                uint256 s = (pairQty.longQty + qty - pairQty.shortQty) * limitPrice * 1e4 / sc.onePercentDepthAboveUsd + 1;
+                slippage = s > sc.slippageLongP ? s : sc.slippageLongP;
             }
             return limitPrice * (1e4 - slippage) / 1e4;
         } else {
             uint slippage = sc.slippageShortP;
-            if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-                // slippage = (shortQty + qty) * price / depthBelowUsd + 1
+            if (sc.slippageType == ISlippageManager.SlippageType.ONE_PERCENT_DEPTH) {
+                // slippage = (shortQty + qty) * price / depthBelowUsd
                 slippage = (pairQty.shortQty + qty) * limitPrice * 1e4 / sc.onePercentDepthBelowUsd + 1;
+            } else if (sc.slippageType == ISlippageManager.SlippageType.NET_POSITION && pairQty.shortQty + qty >= pairQty.longQty) {
+                // slippage = max((shortQty + qty - longQty) * price / depthAboveUsd + 1, slippageLongP)
+                uint256 s = (pairQty.shortQty + qty - pairQty.longQty) * limitPrice * 1e4 / sc.onePercentDepthBelowUsd + 1;
+                slippage = s > sc.slippageShortP ? s : sc.slippageShortP;
             }
             return limitPrice * (1e4 + slippage) / 1e4;
         }
@@ -109,7 +126,7 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         );
         return longAccFundingFeePerShare;
     }
-    
+
     function _updateFundingFee(
         ITradingCore.PairPositionInfo storage ppi, address pairBase, uint256 marketPrice
     ) private returns (uint256 lpReceiveFundingFeeUsd){
@@ -178,7 +195,7 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
                 if (ppi.longQty == qty) {
                     ppi.lpShortAvgPrice = 0;
                 } else {
-                    ppi.lpShortAvgPrice = uint64((ppi.lpShortAvgPrice * ppi.longQty - userPrice * qty) / (ppi.longQty - qty));                    
+                    ppi.lpShortAvgPrice = uint64((ppi.lpShortAvgPrice * ppi.longQty - userPrice * qty) / (ppi.longQty - qty));
                 }
                 ppi.longQty -= qty;
             } else {

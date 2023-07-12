@@ -32,7 +32,7 @@ contract TradingConfigFacet is ITradingConfig {
         bool limitOrder, bool executeLimitOrder, bool marketTrade,
         bool userCloseTrade, bool tpSlCloseTrade, bool liquidateTradeSwitch
     ) external override {
-        LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
         uint tradeSwitches = 0;
         tradeSwitches = tradeSwitches.setOrClearBit(uint8(TradingSwitch.LIMIT_ORDER), limitOrder);
         tradeSwitches = tradeSwitches.setOrClearBit(uint8(TradingSwitch.EXECUTE_LIMIT_ORDER), executeLimitOrder);
@@ -56,5 +56,15 @@ contract TradingConfigFacet is ITradingConfig {
     function setMaxTakeProfitP(uint24 maxTakeProfitP) external override {
         LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
         LibTradingConfig.setMaxTakeProfitP(maxTakeProfitP);
+    }
+
+    function updateProtectionPrice(PriceConfig[] calldata priceConfigs) external override {
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
+        require(priceConfigs.length > 0, "TradingConfigFacet: Parameters cannot be empty");
+        LibTradingConfig.updateProtectionPrice(priceConfigs);
+    }
+
+    function getProtectionPrice(address pairBase) external view override returns (PriceProtection memory) {
+        return LibTradingConfig.tradingConfigStorage().priceProtections[pairBase];
     }
 }

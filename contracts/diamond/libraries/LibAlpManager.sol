@@ -36,6 +36,14 @@ library LibAlpManager {
 
     event MintAddLiquidity(address indexed account, address indexed token, uint256 amount);
     event BurnRemoveLiquidity(address indexed account, address indexed token, uint256 amount);
+    event MintFee(
+        address indexed account, address indexed tokenIn, uint256 amountIn,
+        uint256 tokenInPrice, uint256 mintFeeUsd, uint256 alpAmount
+    );
+    event BurnFee(
+        address indexed account, address indexed tokenOut, uint256 amountOut,
+        uint256 tokenOutPrice, uint256 burnFeeUsd, uint256 alpAmount
+    );
 
     function alpPrice() internal view returns (uint256) {
         int256 totalValueUsd = LibVault.getTotalValueUsd();
@@ -72,7 +80,7 @@ library LibAlpManager {
         emit MintAddLiquidity(account, tokenIn, amount);
     }
 
-    function _calculateAlpAmount(LibVault.AvailableToken memory at, uint256 amount) private view returns (uint256 alpAmount) {
+    function _calculateAlpAmount(LibVault.AvailableToken memory at, uint256 amount) private returns (uint256 alpAmount) {
         require(at.tokenAddress != address(0), "LibAlpManager: Token does not exist");
         (int256 lpUnPnlUsd, int256 lpTokenUnPnlUsd) = ITradingCore(address(this)).lpUnrealizedPnlUsd(at.tokenAddress);
         int256 totalValueUsd = LibVault.getTotalValueUsd() + lpUnPnlUsd;
@@ -83,6 +91,7 @@ library LibAlpManager {
         int256 poolTokenInUsd = int256(LibVault.vaultStorage().treasury[at.tokenAddress] * tokenInPrice * 1e10 / (10 ** at.decimals)) + lpTokenUnPnlUsd;
         uint256 afterTaxAmountUsd = amountUsd * (1e4 - _getFeePoint(at, uint256(totalValueUsd), poolTokenInUsd, amountUsd, true)) / 1e4;
         alpAmount = afterTaxAmountUsd * 1e8 / _alpPrice(totalValueUsd);
+        emit MintFee(msg.sender, at.tokenAddress, amount, tokenInPrice, amountUsd - afterTaxAmountUsd, alpAmount);
     }
 
     function _addMinted(address account) private {
@@ -108,7 +117,7 @@ library LibAlpManager {
         emit BurnRemoveLiquidity(account, tokenOut, amountOut);
     }
 
-    function _calculateTokenAmount(LibVault.AvailableToken memory at, uint256 alpAmount) private view returns (uint256 amountOut) {
+    function _calculateTokenAmount(LibVault.AvailableToken memory at, uint256 alpAmount) private returns (uint256 amountOut) {
         require(at.tokenAddress != address(0), "LibAlpManager: Token does not exist");
         (int256 lpUnPnlUsd, int256 lpTokenUnPnlUsd) = ITradingCore(address(this)).lpUnrealizedPnlUsd(at.tokenAddress);
         int256 totalValueUsd = LibVault.getTotalValueUsd() + lpUnPnlUsd;
@@ -121,7 +130,9 @@ library LibAlpManager {
         require(poolTokenOutUsd >= int256(amountOutUsd), "LibAlpManager: tokenOut balance is insufficient");
         uint256 afterTaxAmountOutUsd = amountOutUsd * (1e4 - _getFeePoint(at, uint256(totalValueUsd), poolTokenOutUsd, amountOutUsd, false)) / 1e4;
         require(int256(afterTaxAmountOutUsd) <= LibVault.maxWithdrawAbleUsd(totalValueUsd), "LibAlpManager: tokenOut balance is insufficient");
-        return afterTaxAmountOutUsd * (10 ** at.decimals) / (tokenOutPrice * 1e10);
+        amountOut = afterTaxAmountOutUsd * (10 ** at.decimals) / (tokenOutPrice * 1e10);
+        emit BurnFee(msg.sender, at.tokenAddress, amountOut, tokenOutPrice, amountOutUsd - afterTaxAmountOutUsd, alpAmount);
+        return amountOut;
     }
 
     function _getFeePoint(
@@ -140,12 +151,12 @@ library LibAlpManager {
         }
 
         uint256 initDiff = poolTokenUsd > int256(targetValueUsd)
-        ? uint256(poolTokenUsd) - targetValueUsd  // ∵ (poolTokenUsd > targetValueUsd && targetValueUsd > 0) ∴ (poolTokenUsd > 0)
-        : uint256(int256(targetValueUsd) - poolTokenUsd);
+            ? uint256(poolTokenUsd) - targetValueUsd  // ∵ (poolTokenUsd > targetValueUsd && targetValueUsd > 0) ∴ (poolTokenUsd > 0)
+            : uint256(int256(targetValueUsd) - poolTokenUsd);
 
         uint256 nextDiff = nextValueUsd > int256(targetValueUsd)
-        ? uint256(nextValueUsd) - targetValueUsd
-        : uint256(int256(targetValueUsd) - nextValueUsd);
+            ? uint256(nextValueUsd) - targetValueUsd
+            : uint256(int256(targetValueUsd) - nextValueUsd);
 
         if (nextDiff < initDiff) {
             uint256 feeAdjust = at.taxBasisPoints * initDiff / targetValueUsd;

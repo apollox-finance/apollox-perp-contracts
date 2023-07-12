@@ -56,7 +56,7 @@ contract OrderAndTradeHistoryFacet is IOrderAndTradeHistory, OnlySelf {
         trade.margin = newMargin;
     }
 
-    function getOrderAndTradeHistory(
+    function getOrderAndTradeHistoryV2(
         address user, uint start, uint8 size
     ) external view override returns (OrderAndTradeHistory[] memory datas) {
         LibOrderAndTradeHistory.OrderAndTradeHistoryStorage storage hs = LibOrderAndTradeHistory.historyStorage();
@@ -74,13 +74,13 @@ contract OrderAndTradeHistoryFacet is IOrderAndTradeHistory, OnlySelf {
                 if (ai.actionType == ActionType.LIMIT || ai.actionType == ActionType.CANCEL_LIMIT || ai.actionType == ActionType.SYSTEM_CANCEL) {
                     datas[i.into()] = OrderAndTradeHistory(
                         ai.hash, ai.timestamp, name, ai.actionType, oi.tokenIn, oi.isLong, oi.amountIn, oi.qty,
-                        oi.entryPrice, 0, 0, 0, 0, 0, 0, 0
+                        oi.entryPrice, 0, 0, 0, 0, 0, 0, 0, 0, 0
                     );
                 } else if (ai.actionType == ActionType.OPEN) {
                     TradeInfo memory ti = hs.tradeInfos[ai.hash];
                     datas[i.into()] = OrderAndTradeHistory(
                         ai.hash, ai.timestamp, name, ai.actionType, oi.tokenIn, oi.isLong, oi.amountIn,
-                        oi.qty, oi.entryPrice, ti.margin, ti.openFee, ti.executionFee, 0, 0, 0, 0
+                        oi.qty, oi.entryPrice, ti.margin, ti.openFee, ti.executionFee, 0, 0, 0, 0, 0, 0
                     );
                 } else {
                     TradeInfo memory ti = hs.tradeInfos[ai.hash];
@@ -88,7 +88,7 @@ contract OrderAndTradeHistoryFacet is IOrderAndTradeHistory, OnlySelf {
                     datas[i.into()] = OrderAndTradeHistory(
                         ai.hash, ai.timestamp, name, ai.actionType, oi.tokenIn, oi.isLong, oi.amountIn,
                         oi.qty, oi.entryPrice, ti.margin, ti.openFee, ti.executionFee,
-                        ci.closePrice, ci.fundingFee, ci.closeFee, ci.pnl
+                        ci.closePrice, ci.fundingFee, ci.closeFee, ci.pnl, ci.holdingFee, ti.openTimestamp
                     );
                 }
             }

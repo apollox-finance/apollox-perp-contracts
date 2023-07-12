@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "./IPairsManager.sol";
+import "./ISlippageManager.sol";
 
 interface ITradingCore {
 
@@ -24,7 +24,7 @@ interface ITradingCore {
         uint64 lpLongAvgPrice;             // 1e8
         address pairBase;
         uint16 pairIndex;
-        uint64 lpShortAvgPrice;       
+        uint64 lpShortAvgPrice;
     }
 
     struct LpMarginTokenUnPnl {
@@ -43,7 +43,7 @@ interface ITradingCore {
 
     function slippagePrice(
         PairQty memory pairQty,
-        IPairsManager.SlippageConfig memory sc,
+        ISlippageManager.SlippageConfig memory sc,
         uint256 marketPrice, uint256 qty, bool isLong
     ) external pure returns (uint256);
 
@@ -51,7 +51,7 @@ interface ITradingCore {
 
     function triggerPrice(
         PairQty memory pairQty,
-        IPairsManager.SlippageConfig memory sc,
+        ISlippageManager.SlippageConfig memory sc,
         uint256 limitPrice, uint256 qty, bool isLong
     ) external pure returns (uint256);
 

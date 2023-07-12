@@ -19,6 +19,7 @@ interface IOrderAndTradeHistory {
         uint96 margin;
         uint96 openFee;
         uint96 executionFee;
+        uint40 openTimestamp;
     }
 
     struct CloseInfo {
@@ -26,6 +27,7 @@ interface IOrderAndTradeHistory {
         int96 fundingFee;   // tokenIn decimals
         uint96 closeFee;    // tokenIn decimals
         int96 pnl;          // tokenIn decimals
+        uint96 holdingFee;  // tokenIn decimals
     }
 
     struct ActionInfo {
@@ -53,6 +55,8 @@ interface IOrderAndTradeHistory {
         int96 fundingFee;          // tokenIn decimals
         uint96 closeFee;           // tokenIn decimals
         int96 pnl;                 // tokenIn decimals
+        uint96 holdingFee;         // tokenIn decimals
+        uint40 openTimestamp;
     }
 
     function createLimitOrder(bytes32 orderHash, OrderInfo calldata) external;
@@ -67,7 +71,7 @@ interface IOrderAndTradeHistory {
 
     function updateMargin(bytes32 tradeHash, uint96 newMargin) external;
 
-    function getOrderAndTradeHistory(
+    function getOrderAndTradeHistoryV2(
         address user, uint start, uint8 size
     ) external view returns (OrderAndTradeHistory[] memory);
 }

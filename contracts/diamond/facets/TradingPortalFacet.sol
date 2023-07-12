@@ -21,7 +21,7 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
         require(ot.margin > 0, "TradingPortalFacet: Trade information does not exist");
         require(ot.user == msg.sender, "TradingPortalFacet: Can only be updated by yourself");
     }
-    
+
     function openMarketTrade(OpenDataInput calldata data) external override {
         ITradingChecker(address(this)).openMarketTradeCheck(data);
 
@@ -91,14 +91,18 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
         } else {
             MarginBalance[] memory balances = new MarginBalance[](tokenIns.length);
             uint256 totalBalanceUsd;
+            UC index = ZERO;
             for (UC i = ZERO; i < uc(tokenIns.length); i = i + ONE) {
                 IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(tokenIns[i.into()]);
-                uint balanceUsd = mt.price * ts.openTradeAmountIns[tokenIns[i.into()]] * 1e10 / (10 ** mt.decimals);
-                balances[i.into()] = MarginBalance(tokenIns[i.into()], mt.price, mt.decimals, balanceUsd);
-                totalBalanceUsd += balanceUsd;
+                if (mt.asMargin && ts.openTradeAmountIns[tokenIns[i.into()]] > 0) {
+                    uint balanceUsd = mt.price * ts.openTradeAmountIns[tokenIns[i.into()]] * 1e10 / (10 ** mt.decimals);
+                    balances[index.into()] = MarginBalance(tokenIns[i.into()], mt.price, mt.decimals, balanceUsd);
+                    totalBalanceUsd += balanceUsd;
+                    index = index + ONE;
+                }
             }
             uint points = 1e4;
-            for (UC i = ONE; i < uc(balances.length); i = i + uc(1)) {
+            for (UC i = ONE; i < index; i = i + uc(1)) {
                 MarginBalance memory mb = balances[i.into()];
                 uint share = mb.balanceUsd * 1e4 / totalBalanceUsd;
                 points -= share;

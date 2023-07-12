@@ -19,7 +19,6 @@ interface IAlp {
 contract AlpManagerFacet is ReentrancyGuard, Pausable, IAlpManager {
 
     using Address for address;
-    address private constant BUSD = 0xe9e7CEA3DedcA5984780Bafc599bD69ADd087D56;
 
     function initAlpManagerFacet(address alpToken) external {
         LibAccessControlEnumerable.checkRole(Constants.DEPLOYER_ROLE);
@@ -42,7 +41,6 @@ contract AlpManagerFacet is ReentrancyGuard, Pausable, IAlpManager {
     }
 
     function mintAlp(address tokenIn, uint256 amount, uint256 minAlp, bool stake) external whenNotPaused nonReentrant override {
-        require(tokenIn != BUSD, "AlpManagerFacet: BUSD mint ALP is not supported at this time");
         require(amount > 0, "AlpManagerFacet: invalid amount");
         address account = msg.sender;
         uint256 alpAmount = LibAlpManager.mintAlp(account, tokenIn, amount);

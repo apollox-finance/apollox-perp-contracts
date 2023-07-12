@@ -5,6 +5,14 @@ interface IAlpManager {
 
     event MintAlp(address indexed account, address indexed tokenIn, uint256 amountIn, uint256 alpOut);
     event BurnAlp(address indexed account, address indexed receiver, address indexed tokenOut, uint256 alpAmount, uint256 amountOut);
+    event MintFee(
+        address indexed account, address indexed tokenIn, uint256 amountIn,
+        uint256 tokenInPrice, uint256 mintFeeUsd, uint256 alpAmount
+    );
+    event BurnFee(
+        address indexed account, address indexed tokenOut, uint256 amountOut,
+        uint256 tokenOutPrice, uint256 burnFeeUsd, uint256 alpAmount
+    );
 
     function ALP() external view returns (address);
 

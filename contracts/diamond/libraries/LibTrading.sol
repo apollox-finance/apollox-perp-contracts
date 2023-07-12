@@ -74,4 +74,13 @@ library LibTrading {
         }
         ts.openTradeAmountIns[token] += amount;
     }
+
+    function calcHoldingFee(ITrading.OpenTrade storage ot, IVault.MarginToken memory mt) internal view returns (uint256) {
+        uint256 holdingFee;
+        if (ot.holdingFeeRate > 0 && ot.openBlock > 0) {
+            // holdingFeeRate 1e12
+            holdingFee = uint256(ot.entryPrice) * ot.qty * (block.number - ot.openBlock) * ot.holdingFeeRate * (10 ** mt.decimals) / uint256(1e22 * mt.price);
+        }
+        return holdingFee;
+    }
 }

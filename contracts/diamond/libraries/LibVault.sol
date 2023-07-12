@@ -81,9 +81,6 @@ library LibVault {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
         require(at.tokenAddress == address(0), "LibVault: Can't add token that already exists");
-        if (dynamicFee && taxBasisPoints <= feeBasisPoints) {
-            revert("LibVault: TaxBasisPoints must be greater than feeBasisPoints at dynamic rates");
-        }
         at.tokenAddress = tokenAddress;
         at.tokenAddressPosition = uint32(vs.tokenAddresses.length);
         at.feeBasisPoints = feeBasisPoints;
@@ -121,9 +118,6 @@ library LibVault {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
         require(at.tokenAddress != address(0), "LibVault: Token does not exist");
-        if (dynamicFee && taxBasisPoints <= feeBasisPoints) {
-            revert("LibVault: TaxBasisPoints must be greater than feeBasisPoints at dynamic rates");
-        }
         (uint16 oldFeePoints, uint16 oldTaxPoints, bool oldDynamicFee) = (at.feeBasisPoints, at.taxBasisPoints, at.dynamicFee);
         at.feeBasisPoints = feeBasisPoints;
         at.taxBasisPoints = taxBasisPoints;

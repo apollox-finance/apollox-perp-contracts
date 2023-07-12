@@ -2,6 +2,13 @@
 pragma solidity ^0.8.19;
 
 interface ITradingConfig {
+
+    event SetTradeSwitches(uint16 indexed oldTradeSwitches, uint16 indexed tradeSwitches);
+    event SetExecutionFeeUsd(uint256 oldExecutionFeeUsd, uint256 executionFeeUsd);
+    event SetMinNotionalUsd(uint256 oldMinNotionalUsd, uint256 minNotionalUsd);
+    event SetMaxTakeProfitP(uint24 oldMaxTakeProfitP, uint24 maxTakeProfitP);
+    event UpdateProtectionPrice(address indexed pairBase, uint64 upperPrice, uint64 lowerPrice);
+
     /*
     |-----------> 8 bit <-----------|
     |---|---|---|---|---|---|---|---|
@@ -29,6 +36,18 @@ interface ITradingConfig {
         bool liquidateTrading;
     }
 
+    struct PriceProtection {
+        uint40 updatedAt;
+        uint64 upperPrice;  // 1e8
+        uint64 lowerPrice;  // 1e8
+    }
+
+    struct PriceConfig {
+        address pairBase;
+        uint64 upperPrice;  // 1e8
+        uint64 lowerPrice;  // 1e8
+    }
+
     function getTradingConfig() external view returns (TradingConfig memory);
 
     function setTradingSwitches(
@@ -41,4 +60,8 @@ interface ITradingConfig {
     function setMinNotionalUsd(uint256 minNotionalUsd) external;
 
     function setMaxTakeProfitP(uint24 maxTakeProfitP) external;
+
+    function updateProtectionPrice(PriceConfig[] calldata priceConfigs) external;
+
+    function getProtectionPrice(address pairBase) external view returns (PriceProtection memory);
 }

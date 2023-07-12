@@ -71,7 +71,7 @@ contract LimitOrderFacet is ILimitOrder {
     function getLimitOrderByHash(bytes32 orderHash) public view override returns (LimitOrderView memory) {
         LimitOrder memory o = LibLimitOrder.limitOrderStorage().limitOrders[orderHash];
         return LimitOrderView(
-            orderHash, IPairsManager(address(this)).getPairByBase(o.pairBase).name, o.pairBase, o.isLong,
+            orderHash, IPairsManager(address(this)).getPairByBaseV2(o.pairBase).name, o.pairBase, o.isLong,
             o.tokenIn, o.amountIn, o.qty, o.limitPrice, o.stopLoss, o.takeProfit, o.broker, o.timestamp
         );
     }

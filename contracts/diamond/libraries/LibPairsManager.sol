@@ -6,6 +6,7 @@ import "../interfaces/IPriceFacade.sol";
 import "../interfaces/ITradingCore.sol";
 import "../interfaces/IPairsManager.sol";
 import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
+import "../interfaces/ISlippageManager.sol";
 
 library LibPairsManager {
 
@@ -35,7 +36,7 @@ library LibPairsManager {
         uint16 slippageLongP;       // 1e4
         uint16 slippageShortP;      // 1e4
         uint16 index;
-        IPairsManager.SlippageType slippageType;
+        ISlippageManager.SlippageType slippageType;
         bool enable;
     }
 
@@ -62,6 +63,9 @@ library LibPairsManager {
         // tier => LeverageMargin
         mapping(uint16 => LeverageMargin) leverageMargins;
         uint16 maxTier;
+
+        uint40 longHoldingFeeRate;    // 1e12
+        uint40 shortHoldingFeeRate;   // 1e12
     }
 
     struct PairsManagerStorage {
@@ -80,17 +84,6 @@ library LibPairsManager {
         }
     }
 
-    event AddSlippageConfig(
-        uint16 indexed index, IPairsManager.SlippageType indexed slippageType,
-        uint256 onePercentDepthAboveUsd, uint256 onePercentDepthBelowUsd,
-        uint16 slippageLongP, uint16 slippageShortP, string name
-    );
-    event RemoveSlippageConfig(uint16 indexed index);
-    event UpdateSlippageConfig(
-        uint16 indexed index, IPairsManager.SlippageType indexed slippageType,
-        uint256 onePercentDepthAboveUsd, uint256 onePercentDepthBelowUsd,
-        uint16 slippageLongP, uint16 slippageShortP
-    );
     event AddPair(
         address indexed base,
         IPairsManager.PairType indexed pairType, IPairsManager.PairStatus indexed status,
@@ -99,8 +92,13 @@ library LibPairsManager {
     );
     event UpdatePairMaxOi(
         address indexed base,
-        uint256 OldMaxLongOiUsd, uint256 oldMaxShortOiUsd,
+        uint256 oldMaxLongOiUsd, uint256 oldMaxShortOiUsd,
         uint256 maxLongOiUsd, uint256 maxShortOiUsd
+    );
+    event UpdatePairHoldingFeeRate(
+        address indexed base,
+        uint40 oldLongRate, uint40 oldShortRate,
+        uint40 longRate, uint40 shortRate
     );
     event UpdatePairFundingFeeConfig(
         address indexed base,
@@ -116,57 +114,6 @@ library LibPairsManager {
     event UpdatePairSlippage(address indexed base, uint16 indexed oldSlippageConfigIndexed, uint16 indexed slippageConfigIndex);
     event UpdatePairFee(address indexed base, uint16 indexed oldFeeConfigIndex, uint16 indexed feeConfigIndex);
     event UpdatePairLeverageMargin(address indexed base, LeverageMargin[] leverageMargins);
-
-    function addSlippageConfig(
-        uint16 index, string calldata name, IPairsManager.SlippageType slippageType,
-        uint256 onePercentDepthAboveUsd, uint256 onePercentDepthBelowUsd,
-        uint16 slippageLongP, uint16 slippageShortP
-    ) internal {
-        PairsManagerStorage storage pms = pairsManagerStorage();
-        SlippageConfig storage config = pms.slippageConfigs[index];
-        require(!config.enable, "LibPairsManager: Configuration already exists");
-        if (slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-            require(onePercentDepthAboveUsd > 0 && onePercentDepthBelowUsd > 0, "LibPairsManager: Invalid dynamic slippage parameter configuration");
-        }        
-        config.index = index;
-        config.name = name;
-        config.enable = true;
-        config.slippageType = slippageType;
-        config.onePercentDepthAboveUsd = onePercentDepthAboveUsd;
-        config.onePercentDepthBelowUsd = onePercentDepthBelowUsd;
-        config.slippageLongP = slippageLongP;
-        config.slippageShortP = slippageShortP;
-        emit AddSlippageConfig(index, slippageType, onePercentDepthAboveUsd,
-            onePercentDepthBelowUsd, slippageLongP, slippageShortP, name);
-    }
-
-    function removeSlippageConfig(uint16 index) internal {
-        PairsManagerStorage storage pms = pairsManagerStorage();
-        SlippageConfig storage config = pms.slippageConfigs[index];
-        require(config.enable, "LibPairsManager: Configuration not enabled");
-        require(pms.slippageConfigPairs[index].length == 0, "LibPairsManager: Cannot remove a configuration that is still in use");
-        delete pms.slippageConfigs[index];
-        emit RemoveSlippageConfig(index);
-    }
-
-    function updateSlippageConfig(SlippageConfig memory sc) internal {
-        PairsManagerStorage storage pms = pairsManagerStorage();
-        SlippageConfig storage config = pms.slippageConfigs[sc.index];
-        require(config.enable, "LibPairsManager: Configuration not enabled");
-        if (sc.slippageType == IPairsManager.SlippageType.ONE_PERCENT_DEPTH) {
-            require(sc.onePercentDepthAboveUsd > 0 && sc.onePercentDepthBelowUsd > 0, "LibPairsManager: Invalid dynamic slippage parameter configuration");
-        }
-
-        config.slippageType = sc.slippageType;
-        config.onePercentDepthAboveUsd = sc.onePercentDepthAboveUsd;
-        config.onePercentDepthBelowUsd = sc.onePercentDepthBelowUsd;
-        config.slippageLongP = sc.slippageLongP;
-        config.slippageShortP = sc.slippageShortP;
-        emit UpdateSlippageConfig(
-            sc.index, sc.slippageType, sc.onePercentDepthAboveUsd, sc.onePercentDepthBelowUsd,
-            sc.slippageLongP, sc.slippageShortP
-        );
-    }
 
     function addPair(
         IPairsManager.PairSimple memory ps,
@@ -234,6 +181,18 @@ library LibPairsManager {
             base, oldFundingFeePerBlockP, oldMinFundingFeeR, oldMaxFundingFeeR,
             fundingFeePerBlockP, minFundingFeeR, maxFundingFeeR
         );
+    }
+
+    function updatePairHoldingFeeRate(address base, uint40 longHoldingFeeRate, uint40 shortHoldingFeeRate) internal {
+        PairsManagerStorage storage pms = pairsManagerStorage();
+        Pair storage pair = pms.pairs[base];
+        require(pair.base != address(0), "LibPairsManager: Pair does not exist");
+
+        uint40 oldLongRate = pair.longHoldingFeeRate;
+        uint40 oldShortRate = pair.shortHoldingFeeRate;
+        pair.longHoldingFeeRate = longHoldingFeeRate;
+        pair.shortHoldingFeeRate = shortHoldingFeeRate;
+        emit UpdatePairHoldingFeeRate(base, oldLongRate, oldShortRate, longHoldingFeeRate, shortHoldingFeeRate);
     }
 
     function removePair(address base) internal {

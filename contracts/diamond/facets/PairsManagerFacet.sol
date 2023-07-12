@@ -9,58 +9,13 @@ import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 contract PairsManagerFacet is IPairsManager {
 
-    function addSlippageConfig(
-        string calldata name, uint16 index, SlippageType slippageType,
-        uint256 onePercentDepthAboveUsd, uint256 onePercentDepthBelowUsd, // Allowed to be 0
-        uint16 slippageLongP, uint16 slippageShortP  // Allowed to be 0
-    ) external override {
-        LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
-        require(slippageLongP < 1e4 && slippageShortP < 1e4,
-            "PairsManagerFacet: Invalid parameters");
-        LibPairsManager.addSlippageConfig(index, name, slippageType,
-            onePercentDepthAboveUsd, onePercentDepthBelowUsd, slippageLongP, slippageShortP);
-    }
-
-    function removeSlippageConfig(uint16 index) external override {
-        LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
-        LibPairsManager.removeSlippageConfig(index);
-    }
-
-    function updateSlippageConfig(
-        uint16 index, SlippageType slippageType,
-        uint256 onePercentDepthAboveUsd, uint256 onePercentDepthBelowUsd, // Allowed to be 0
-        uint16 slippageLongP, uint16 slippageShortP  // Allowed to be 0
-    ) external override {
-        LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
-        require(slippageLongP < 1e4 && slippageShortP < 1e4,
-            "PairsManagerFacet: Invalid parameters");
-        LibPairsManager.SlippageConfig memory config = LibPairsManager.SlippageConfig(
-            "", onePercentDepthAboveUsd, onePercentDepthBelowUsd, slippageLongP, slippageShortP, index, slippageType, true
-        );
-        LibPairsManager.updateSlippageConfig(config);
-    }
-
-    function getSlippageConfigByIndex(uint16 index) external view override returns (LibPairsManager.SlippageConfig memory, PairSimple[] memory) {
-        LibPairsManager.PairsManagerStorage storage pms = LibPairsManager.pairsManagerStorage();
-        LibPairsManager.SlippageConfig memory config = pms.slippageConfigs[index];
-        address[] memory slippagePairs = pms.slippageConfigPairs[index];
-        PairSimple[] memory pairSimples = new PairSimple[](slippagePairs.length);
-        if (slippagePairs.length > 0) {
-            mapping(address => LibPairsManager.Pair) storage _pairs = LibPairsManager.pairsManagerStorage().pairs;
-            for (uint i; i < slippagePairs.length; i++) {
-                LibPairsManager. Pair storage pair = _pairs[slippagePairs[i]];
-                pairSimples[i] = PairSimple(pair.name, pair.base, pair.pairType, pair.status);
-            }
-        }
-        return (config, pairSimples);
-    }
-
     function addPair(
         address base, string calldata name,
         PairType pairType, PairStatus status,
         PairMaxOiAndFundingFeeConfig calldata pairConfig,
         uint16 slippageConfigIndex, uint16 feeConfigIndex,
-        LibPairsManager.LeverageMargin[] calldata leverageMargins
+        LibPairsManager.LeverageMargin[] calldata leverageMargins,
+        uint40 longHoldingFeeRate, uint40 shortHoldingFeeRate
     ) external override {
         LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
@@ -71,6 +26,7 @@ contract PairsManagerFacet is IPairsManager {
         LibPairsManager.updatePairFundingFeeConfig(
             base, pairConfig.fundingFeePerBlockP, pairConfig.minFundingFeeR, pairConfig.maxFundingFeeR
         );
+        LibPairsManager.updatePairHoldingFeeRate(base, longHoldingFeeRate, shortHoldingFeeRate);
     }
 
     function updatePairMaxOi(address base, uint256 maxLongOiUsd, uint256 maxShortOiUsd) external override {
@@ -79,10 +35,16 @@ contract PairsManagerFacet is IPairsManager {
         LibPairsManager.updatePairMaxOi(base, maxLongOiUsd, maxShortOiUsd);
     }
 
+    function updatePairHoldingFeeRate(address base, uint40 longHoldingFeeRate, uint40 shortHoldingFeeRate) external override {
+        LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
+        require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
+        LibPairsManager.updatePairHoldingFeeRate(base, longHoldingFeeRate, shortHoldingFeeRate);
+    }
+
     function updatePairFundingFeeConfig(
         address base, uint256 fundingFeePerBlockP, uint256 minFundingFeeR, uint256 maxFundingFeeR
     ) external override {
-        LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
         LibPairsManager.updatePairFundingFeeConfig(base, fundingFeePerBlockP, minFundingFeeR, maxFundingFeeR);
     }
@@ -98,7 +60,7 @@ contract PairsManagerFacet is IPairsManager {
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
         LibPairsManager.updatePairStatus(base, status);
     }
-    
+
     function batchUpdatePairStatus(PairType pairType, PairStatus status) external override {
         LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
         LibPairsManager.batchUpdatePairStatus(pairType, status);
@@ -159,7 +121,7 @@ contract PairsManagerFacet is IPairsManager {
         }
     }
 
-    function pairs() external view override returns (PairView[] memory) {
+    function pairsV2() external view override returns (PairView[] memory) {
         LibPairsManager.PairsManagerStorage storage pms = LibPairsManager.pairsManagerStorage();
         address[] memory bases = pms.pairBases;
         PairView[] memory pairViews = new PairView[](bases.length);
@@ -170,7 +132,7 @@ contract PairsManagerFacet is IPairsManager {
         return pairViews;
     }
 
-    function getPairByBase(address base) external view override returns (PairView memory) {
+    function getPairByBaseV2(address base) external view override returns (PairView memory) {
         LibPairsManager.PairsManagerStorage storage pms = LibPairsManager.pairsManagerStorage();
         LibPairsManager.Pair storage pair = pms.pairs[base];
         return _pairToView(pair, pms.slippageConfigs[pair.slippageConfigIndex]);
@@ -178,17 +140,17 @@ contract PairsManagerFacet is IPairsManager {
 
     function _pairToView(
         LibPairsManager.Pair storage pair, LibPairsManager.SlippageConfig memory slippageConfig
-    ) private view returns (IPairsManager.PairView memory) {
+    ) private view returns (PairView memory) {
         LibPairsManager.LeverageMargin[] memory leverageMargins = new LibPairsManager.LeverageMargin[](pair.maxTier);
         for (uint16 i = 0; i < pair.maxTier; i++) {
             leverageMargins[i] = pair.leverageMargins[i + 1];
         }
         (LibFeeManager.FeeConfig memory feeConfig,) = LibFeeManager.getFeeConfigByIndex(pair.feeConfigIndex);
-        IPairsManager.PairView memory pv = IPairsManager.PairView(
+        PairView memory pv = PairView(
             pair.name, pair.base, pair.basePosition, pair.pairType, pair.status, pair.maxLongOiUsd, pair.maxShortOiUsd,
             pair.fundingFeePerBlockP, pair.minFundingFeeR, pair.maxFundingFeeR, leverageMargins,
             pair.slippageConfigIndex, pair.slippagePosition, slippageConfig,
-            pair.feeConfigIndex, pair.feePosition, feeConfig
+            pair.feeConfigIndex, pair.feePosition, feeConfig, pair.longHoldingFeeRate, pair.shortHoldingFeeRate
         );
         return pv;
     }
@@ -215,8 +177,8 @@ contract PairsManagerFacet is IPairsManager {
         return FeeConfig(fc.openFeeP, fc.closeFeeP);
     }
 
-    function _convertSlippage(LibPairsManager.SlippageConfig memory sc) private pure returns (SlippageConfig memory) {
-        return SlippageConfig(
+    function _convertSlippage(LibPairsManager.SlippageConfig memory sc) private pure returns (ISlippageManager.SlippageConfig memory) {
+        return ISlippageManager.SlippageConfig(
             sc.onePercentDepthAboveUsd, sc.onePercentDepthBelowUsd,
             sc.slippageLongP, sc.slippageShortP, sc.slippageType
         );
@@ -233,7 +195,16 @@ contract PairsManagerFacet is IPairsManager {
         return _convertFeeRate(pair.feeConfigIndex);
     }
 
-    function getPairSlippageConfig(address base) external view override returns (SlippageConfig memory) {
+    function getPairHoldingFeeRate(address base, bool isLong) external view override returns (uint40 holdingFeeRate) {
+        LibPairsManager.Pair storage pair = LibPairsManager.pairsManagerStorage().pairs[base];
+        if (isLong) {
+            return pair.longHoldingFeeRate;
+        } else {
+            return pair.shortHoldingFeeRate;
+        }
+    }
+
+    function getPairSlippageConfig(address base) external view override returns (ISlippageManager.SlippageConfig memory) {
         LibPairsManager.PairsManagerStorage storage pms = LibPairsManager.pairsManagerStorage();
         LibPairsManager.Pair storage pair = pms.pairs[base];
         return _convertSlippage(pms.slippageConfigs[pair.slippageConfigIndex]);

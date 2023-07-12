@@ -40,11 +40,16 @@ contract TradingCheckerFacet is ITradingChecker {
         }
     }
 
+    function checkProtectionPrice(address pairBase, uint256 price, bool isLong) public view override returns (bool) {
+        ITradingConfig.PriceProtection memory pp = ITradingConfig(address(this)).getProtectionPrice(pairBase);
+        return (isLong && price > pp.lowerPrice) || (!isLong && price < pp.upperPrice);
+    }
+
     function checkLimitOrderTp(ILimitOrder.LimitOrder calldata order) external view override {
         IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(order.tokenIn);
 
         // notionalUsd = price * qty
-        uint notionalUsd = order.limitPrice * order.qty;
+        uint notionalUsd = uint256(order.limitPrice) * order.qty;
 
         // openFeeUsd = notionalUsd * openFeeP
         uint openFeeUsd = notionalUsd * IPairsManager(address(this)).getPairFeeConfig(order.pairBase).openFeeP / 1e4;
@@ -91,7 +96,7 @@ contract TradingCheckerFacet is ITradingChecker {
         );
 
         // price * qty * 10^18 / 10^(8+10) = price * qty
-        uint notionalUsd = data.price * data.qty;
+        uint notionalUsd = uint256(data.price) * data.qty;
         // The notional value must be greater than or equal to the minimum notional value allowed
         require(notionalUsd >= tc.minNotionalUsd, "TradingCheckerFacet: Position is too small");
 
@@ -141,7 +146,7 @@ contract TradingCheckerFacet is ITradingChecker {
             ITradingConfig(address(this)).getTradingConfig(),
             IVault(address(this)).getTokenForTrading(order.tokenIn),
             pairQty,
-            order.limitPrice * order.qty,
+            uint256(order.limitPrice) * order.qty,
             ITradingCore(address(this)).triggerPrice(pairQty, pair.slippageConfig, order.limitPrice, order.qty, order.isLong)
         );
     }
@@ -217,10 +222,13 @@ contract TradingCheckerFacet is ITradingChecker {
                 return (false, 0, 0, Refund.OPEN_LOST);
             }
         }
+        if (!checkProtectionPrice(order.pairBase, order.limitPrice, order.isLong)) {
+            return (false, 0, 0, Refund.PRICE_PROTECTION);
+        }
         return (true,
-        uint96(openFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
-        uint96(tuple.tc.executionFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
-        Refund.NO
+            uint96(openFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
+            uint96(tuple.tc.executionFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
+            Refund.NO
         );
     }
 
@@ -228,7 +236,7 @@ contract TradingCheckerFacet is ITradingChecker {
         IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(ot.tokenIn);
 
         // notionalUsd = price * qty
-        uint notionalUsd = ot.entryPrice * ot.qty;
+        uint notionalUsd = uint256(ot.entryPrice) * ot.qty;
 
         // marginUsd = margin * token.price
         uint marginUsd = ot.margin * token.price * 1e10 / (10 ** token.decimals);
@@ -263,6 +271,8 @@ contract TradingCheckerFacet is ITradingChecker {
             (data.isLong && trialPrice <= data.price) || (!data.isLong && trialPrice >= data.price),
             "TradingCheckerFacet: Unable to trading at a price acceptable to the user"
         );
+
+        require(checkProtectionPrice(data.pairBase, trialPrice, data.isLong), "TradingCheckerFacet: Price protection");
 
         // price * qty * 10^18 / 10^(8+10) = price * qty
         uint notionalUsd = trialPrice * data.qty;
@@ -361,6 +371,9 @@ contract TradingCheckerFacet is ITradingChecker {
         if ((pt.isLong && tuple.entryPrice > pt.price) || (!pt.isLong && tuple.entryPrice < pt.price)) {
             return (false, 0, 0, tuple.entryPrice, Refund.USER_PRICE);
         }
+        if (!checkProtectionPrice(pt.pairBase, tuple.entryPrice, pt.isLong)) {
+            return (false, 0, 0, 0, Refund.PRICE_PROTECTION);
+        }
 
         if (tuple.notionalUsd < tuple.tc.minNotionalUsd) {
             return (false, 0, 0, tuple.entryPrice, Refund.MIN_NOTIONAL_USD);
@@ -414,16 +427,16 @@ contract TradingCheckerFacet is ITradingChecker {
             }
         }
         return (
-        true,
-        uint96(openFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
-        uint96(tuple.tc.executionFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
-        tuple.entryPrice, Refund.NO
+            true,
+            uint96(openFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
+            uint96(tuple.tc.executionFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
+            tuple.entryPrice, Refund.NO
         );
     }
 
     function executeLiquidateCheck(
         ITrading.OpenTrade calldata ot, uint256 marketPrice, uint256 closePrice
-    ) external view returns (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee) {
+    ) external view returns (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee, uint256 holdingFee) {
         IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(ot.tokenIn);
         IPairsManager.TradingPair memory pair = IPairsManager(address(this)).getPairForTrading(ot.pairBase);
 
@@ -431,14 +444,23 @@ contract TradingCheckerFacet is ITradingChecker {
 
         uint256 closeNotionalUsd = closePrice * ot.qty;
         closeFee = closeNotionalUsd * pair.feeConfig.closeFeeP * (10 ** mt.decimals) / (1e4 * 1e10 * mt.price);
-        IPairsManager.LeverageMargin memory lm = marginLeverage(pair.leverageMargins, ot.entryPrice * ot.qty);
-
+        holdingFee = _calcHoldingFee(ot, mt);
         if (ot.isLong) {
-            pnl = (int256(closeNotionalUsd) - int256(uint256(ot.entryPrice * ot.qty))) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
+            pnl = (int256(closeNotionalUsd) - int256(uint256(ot.entryPrice) * ot.qty)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         } else {
-            pnl = (int256(uint256(ot.entryPrice * ot.qty)) - int256(closeNotionalUsd)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
+            pnl = (int256(uint256(ot.entryPrice) * ot.qty) - int256(closeNotionalUsd)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         }
-        int256 loss = int256(closeFee) - fundingFee - pnl;
-        return (loss > 0 && uint256(loss) * 1e4 >= lm.liqLostP * ot.margin, pnl, fundingFee, closeFee);
+        int256 loss = int256(closeFee) - fundingFee - pnl + int256(holdingFee);
+        IPairsManager.LeverageMargin memory lm = marginLeverage(pair.leverageMargins, uint256(ot.entryPrice) * ot.qty);
+        return (loss > 0 && uint256(loss) * 1e4 >= lm.liqLostP * ot.margin, pnl, fundingFee, closeFee, holdingFee);
+    }
+
+    function _calcHoldingFee(ITrading.OpenTrade calldata ot, IVault.MarginToken memory mt) private view returns (uint256) {
+        uint256 holdingFee;
+        if (ot.holdingFeeRate > 0 && ot.openBlock > 0) {
+            // holdingFeeRate 1e12
+            holdingFee = uint256(ot.entryPrice) * ot.qty * (block.number - ot.openBlock) * ot.holdingFeeRate * (10 ** mt.decimals) / uint256(1e22 * mt.price);
+        }
+        return holdingFee;
     }
 }

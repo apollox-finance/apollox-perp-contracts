@@ -60,7 +60,7 @@ library LibAccessControlEnumerable {
         if (!hasRole(role, account)) {
             acs.roles[role].members[account] = true;
             emit RoleGranted(role, account, msg.sender);
-            acs.roleMembers[role].add(account);            
+            acs.roleMembers[role].add(account);
         }
     }
 
@@ -69,7 +69,7 @@ library LibAccessControlEnumerable {
         if (hasRole(role, account)) {
             acs.roles[role].members[account] = false;
             emit RoleRevoked(role, account, msg.sender);
-            acs.roleMembers[role].remove(account);           
+            acs.roleMembers[role].remove(account);
         }
     }
 

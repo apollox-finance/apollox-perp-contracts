@@ -27,36 +27,38 @@ contract TradingReaderFacet is ITradingReader {
         return LibTrading.tradingStorage().pendingTrades[tradeHash];
     }
 
-    function getPositionByHash(bytes32 tradeHash) public view override returns (Position memory) {
+    function getPositionByHashV2(bytes32 tradeHash) public view override returns (Position memory) {
         LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
-        ITrading.OpenTrade memory ot = ts.openTrades[tradeHash];
+        ITrading.OpenTrade storage ot = ts.openTrades[tradeHash];
         int256 fundingFee;
+        uint96 holdingFee;
         if (ot.margin > 0) {
             (uint marketPrice,) = IPriceFacade(address(this)).getPriceFromCacheOrOracle(ot.pairBase);
             IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(ot.tokenIn);
             fundingFee = LibTrading.calcFundingFee(ot, mt, marketPrice);
+            holdingFee = uint96(LibTrading.calcHoldingFee(ot, mt));
         }
         return Position(
             tradeHash, IPairsManager(address(this)).getPairForTrading(ot.pairBase).name, ot.pairBase,
             ot.tokenIn, ot.isLong, ot.margin, ot.qty, ot.entryPrice, ot.stopLoss, ot.takeProfit,
-            ot.openFee, ot.executionFee, fundingFee, ot.timestamp
+            ot.openFee, ot.executionFee, fundingFee, ot.timestamp, holdingFee
         );
     }
 
-    function getPositions(address user, address pairBase) external view override returns (Position[] memory){
+    function getPositionsV2(address user, address pairBase) external view override returns (Position[] memory){
         bytes32[] memory tradeHashes = LibTrading.tradingStorage().userOpenTradeHashes[user];
         // query all
         if (pairBase == address(0)) {
             Position[] memory positions = new Position[](tradeHashes.length);
             for (uint i; i < tradeHashes.length; i++) {
-                positions[i] = getPositionByHash(tradeHashes[i]);
+                positions[i] = getPositionByHashV2(tradeHashes[i]);
             }
             return positions;
         } else {
             Position[] memory _positions = new Position[](tradeHashes.length);
             uint count;
             for (uint i; i < tradeHashes.length; i++) {
-                Position memory p = getPositionByHash(tradeHashes[i]);
+                Position memory p = getPositionByHashV2(tradeHashes[i]);
                 if (p.pairBase == pairBase) {
                     count++;
                 }

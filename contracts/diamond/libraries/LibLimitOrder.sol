@@ -94,7 +94,7 @@ library LibLimitOrder {
         LimitOrderStorage storage los = limitOrderStorage();
         ILimitOrder.LimitOrder memory order = los.limitOrders[orderHash];
         if (!result) {
-            if (refund == ITradingChecker.Refund.USER_PRICE) {
+            if (refund == ITradingChecker.Refund.USER_PRICE || refund == ITradingChecker.Refund.PRICE_PROTECTION) {
                 emit ExecuteLimitOrderRejected(order.user, orderHash, refund);
                 return;
             } else {

@@ -10,7 +10,7 @@ interface ITradingChecker {
 
     enum Refund {
         NO, SWITCH, PAIR_STATUS, AMOUNT_IN, USER_PRICE, MIN_NOTIONAL_USD, MAX_NOTIONAL_USD,
-        MAX_LEVERAGE, TP, SL, PAIR_OI, OPEN_LOST, SYSTEM, FEED_DELAY
+        MAX_LEVERAGE, TP, SL, PAIR_OI, OPEN_LOST, SYSTEM, FEED_DELAY, PRICE_PROTECTION
     }
 
     function checkTp(
@@ -18,6 +18,8 @@ interface ITradingChecker {
     ) external pure returns (bool);
 
     function checkSl(bool isLong, uint stopLoss, uint entryPrice) external pure returns (bool);
+
+    function checkProtectionPrice(address pairBase, uint256 price, bool isLong) external view returns (bool);
 
     function checkLimitOrderTp(ILimitOrder.LimitOrder calldata order) external view;
 
@@ -36,6 +38,6 @@ interface ITradingChecker {
     ) external view returns (bool result, uint96 openFee, uint96 executionFee, uint256 entryPrice, Refund refund);
 
     function executeLiquidateCheck(
-        ITrading.OpenTrade calldata ot, uint256 marketPrice, uint256 closePrice 
-    ) external view returns (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee);
+        ITrading.OpenTrade calldata ot, uint256 marketPrice, uint256 closePrice
+    ) external view returns (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee, uint256 holdingFee);
 }

@@ -32,6 +32,8 @@ interface ITradingReader is ITrading {
         uint96 executionFee; // marginToken decimals
         int256 fundingFee;   // marginToken decimals
         uint40 timestamp;
+
+        uint96 holdingFee;  // marginToken decimals
     }
     enum AssetPurpose {
         LIMIT, PENDING, POSITION
@@ -48,9 +50,9 @@ interface ITradingReader is ITrading {
 
     function getPendingTrade(bytes32 tradeHash) external view returns (PendingTrade memory);
 
-    function getPositionByHash(bytes32 tradeHash) external view returns (Position memory);
+    function getPositionByHashV2(bytes32 tradeHash) external view returns (Position memory);
 
-    function getPositions(address user, address pairBase) external view returns (Position[] memory);
+    function getPositionsV2(address user, address pairBase) external view returns (Position[] memory);
 
     function traderAssets(address[] memory tokens) external view returns (TraderAsset[] memory);
 }

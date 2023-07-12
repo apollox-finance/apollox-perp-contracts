@@ -2,7 +2,10 @@
 pragma solidity ^0.8.19;
 
 import "../../utils/Bits.sol";
+import "../interfaces/IPriceFacade.sol";
 import "../interfaces/ITradingConfig.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
+import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 library LibTradingConfig {
 
@@ -16,6 +19,7 @@ library LibTradingConfig {
         uint24 maxTakeProfitP;
         // ITradingConfig.TradingSwitch
         uint16 tradingSwitches;
+        mapping(address => ITradingConfig.PriceProtection) priceProtections;
     }
 
     function tradingConfigStorage() internal pure returns (TradingConfigStorage storage tcs) {
@@ -29,6 +33,7 @@ library LibTradingConfig {
     event SetExecutionFeeUsd(uint256 oldExecutionFeeUsd, uint256 executionFeeUsd);
     event SetMinNotionalUsd(uint256 oldMinNotionalUsd, uint256 minNotionalUsd);
     event SetMaxTakeProfitP(uint24 oldMaxTakeProfitP, uint24 maxTakeProfitP);
+    event UpdateProtectionPrice(address indexed pairBase, uint64 upperPrice, uint64 lowerPrice);
 
     function initialize(uint256 executionFeeUsd, uint256 minNotionalUsd, uint24 maxTakeProfitP) internal {
         TradingConfigStorage storage tcs = tradingConfigStorage();
@@ -73,5 +78,22 @@ library LibTradingConfig {
 
     function checkTradeSwitch(ITradingConfig.TradingSwitch tradingSwitch) internal view {
         require(uint(tradingConfigStorage().tradingSwitches).bitSet(uint8(tradingSwitch)), "LibTradingConfig: This feature is temporarily disabled");
+    }
+
+    function updateProtectionPrice(ITradingConfig.PriceConfig[] calldata priceConfigs) internal {
+        TradingConfigStorage storage tcs = tradingConfigStorage();
+        for (UC i = ZERO; i < uc(priceConfigs.length); i = i + ONE) {
+            ITradingConfig.PriceConfig memory pc = priceConfigs[i.into()];
+            (uint64 price,) = IPriceFacade(address(this)).getPriceFromCacheOrOracle(pc.pairBase);
+            require(
+                price > 0 && pc.upperPrice > price && pc.lowerPrice < price,
+                string(abi.encodePacked(
+                    "LibTradingConfig: ", Strings.toHexString(pc.pairBase),
+                    " price is invalid.", Strings.toString(price)
+                ))
+            );
+            tcs.priceProtections[pc.pairBase] = ITradingConfig.PriceProtection(uint40(block.timestamp), pc.upperPrice, pc.lowerPrice);
+            emit UpdateProtectionPrice(pc.pairBase, pc.upperPrice, pc.lowerPrice);
+        }
     }
 }
