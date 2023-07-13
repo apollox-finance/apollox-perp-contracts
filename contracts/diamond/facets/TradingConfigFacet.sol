@@ -3,9 +3,11 @@ pragma solidity ^0.8.19;
 
 import "../../utils/Bits.sol";
 import "../../utils/Constants.sol";
+import "../interfaces/IPairsManager.sol";
 import "../interfaces/ITradingConfig.sol";
 import "../libraries/LibTradingConfig.sol";
 import "../libraries/LibAccessControlEnumerable.sol";
+import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 contract TradingConfigFacet is ITradingConfig {
 
@@ -64,7 +66,36 @@ contract TradingConfigFacet is ITradingConfig {
         LibTradingConfig.updateProtectionPrice(priceConfigs);
     }
 
+    function setMaxTpRatioForLeverage(address pairBase, MaxTpRatioForLeverage[] calldata maxTpRatios) external override {
+        LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
+        require(
+            pairBase != address(0) && IPairsManager(address(this)).getPairByBaseV2(pairBase).base != address(0),
+            "TradingConfigFacet: pair does not exist"
+        );
+        LibTradingConfig.setMaxTpRatioForLeverage(pairBase, maxTpRatios);
+    }
+
     function getProtectionPrice(address pairBase) external view override returns (PriceProtection memory) {
         return LibTradingConfig.tradingConfigStorage().priceProtections[pairBase];
+    }
+
+        function getPairMaxTpRatios(address pairBase) external view override returns (MaxTpRatioForLeverage[] memory) {
+        return LibTradingConfig.tradingConfigStorage().maxTpRatios[pairBase];
+    }
+
+    function getPairMaxTpRatio(address pairBase, uint256 leverage_10000) external view override returns (uint24) {
+        LibTradingConfig.TradingConfigStorage storage tcs = LibTradingConfig.tradingConfigStorage();
+        MaxTpRatioForLeverage[] storage tpRatios = tcs.maxTpRatios[pairBase];
+        if (tpRatios.length == 0) {
+            return tcs.maxTakeProfitP;
+        } else {
+            for (UC i = ZERO; i < uc(tpRatios.length); i = i + ONE) {
+                MaxTpRatioForLeverage storage tpRatio = tpRatios[i.into()];
+                if (leverage_10000 < tpRatio.leverage * uint256(1e4)) {
+                    return tpRatio.maxTakeProfitP;
+                }
+            }
+            return tpRatios[tpRatios.length - 1].maxTakeProfitP;
+        }
     }
 }

@@ -14,8 +14,8 @@ interface ITradingChecker {
     }
 
     function checkTp(
-        bool isLong, uint takeProfit, uint entryPrice, uint leverage_10000, uint maxTakeProfitP
-    ) external pure returns (bool);
+        address pairBase, bool isLong, uint takeProfit, uint entryPrice, uint leverage_10000
+    ) external view returns (bool);
 
     function checkSl(bool isLong, uint stopLoss, uint entryPrice) external pure returns (bool);
 

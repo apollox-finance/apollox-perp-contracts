@@ -14,9 +14,22 @@ import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 contract TradingCheckerFacet is ITradingChecker {
 
+    struct CheckTpTuple {
+        address pairBase;
+        bool isLong;
+        uint256 takeProfit;
+        uint256 entryPrice;
+        uint256 leverage_10000;
+    }
+
+    function _checkTp(CheckTpTuple memory tuple) private view returns (bool) {
+        return checkTp(tuple.pairBase, tuple.isLong, tuple.takeProfit, tuple.entryPrice, tuple.leverage_10000);
+    }
+
     function checkTp(
-        bool isLong, uint takeProfit, uint entryPrice, uint leverage_10000, uint maxTakeProfitP
-    ) public pure returns (bool) {
+        address pairBase, bool isLong, uint takeProfit, uint entryPrice, uint leverage_10000
+    ) public view returns (bool) {
+        uint maxTakeProfitP = ITradingConfig(address(this)).getPairMaxTpRatio(pairBase, leverage_10000);
         if (isLong) {
             // The takeProfit price must be set and the percentage of profit must not exceed the maximum allowed
             return takeProfit > entryPrice && (takeProfit - entryPrice) * leverage_10000 <= maxTakeProfitP * entryPrice;
@@ -61,7 +74,7 @@ contract TradingCheckerFacet is ITradingChecker {
         uint leverage_10000 = notionalUsd * 1e4 / marginUsd;
 
         require(
-            checkTp(order.isLong, order.takeProfit, order.limitPrice, leverage_10000, ITradingConfig(address(this)).getTradingConfig().maxTakeProfitP),
+            checkTp(order.pairBase, order.isLong, order.takeProfit, order.limitPrice, leverage_10000),
             "TradingCheckerFacet: takeProfit is not in the valid range"
         );
     }
@@ -104,7 +117,7 @@ contract TradingCheckerFacet is ITradingChecker {
         // The notional value of the position must be less than or equal to the maximum notional value allowed by pair
         require(notionalUsd <= lms[lms.length - 1].notionalUsd, "TradingCheckerFacet: Position is too large");
 
-        IPairsManager.LeverageMargin memory lm = marginLeverage(lms, notionalUsd);
+        IPairsManager.LeverageMargin memory lm = _marginLeverage(lms, notionalUsd);
         uint openFeeUsd = notionalUsd * pair.feeConfig.openFeeP / 1e4;
         uint amountInUsd = data.amountIn * token.price * 1e10 / (10 ** token.decimals);
         require(amountInUsd > openFeeUsd + tc.executionFeeUsd, "TradingCheckerFacet: The amount is too small");
@@ -118,7 +131,7 @@ contract TradingCheckerFacet is ITradingChecker {
             "TradingCheckerFacet: Exceeds the maximum leverage allowed for the position"
         );
         require(
-            checkTp(data.isLong, data.takeProfit, data.price, leverage_10000, tc.maxTakeProfitP),
+            _checkTp(CheckTpTuple(data.pairBase, data.isLong, data.takeProfit, data.price, leverage_10000)),
             "TradingCheckerFacet: takeProfit is not in the valid range"
         );
         require(
@@ -173,7 +186,7 @@ contract TradingCheckerFacet is ITradingChecker {
             return (false, 0, 0, Refund.MAX_NOTIONAL_USD);
         }
 
-        IPairsManager.LeverageMargin memory lm = marginLeverage(lms, tuple.notionalUsd);
+        IPairsManager.LeverageMargin memory lm = _marginLeverage(lms, tuple.notionalUsd);
         uint openFeeUsd = tuple.notionalUsd * tuple.pair.feeConfig.openFeeP / 1e4;
         uint amountInUsd = order.amountIn * tuple.token.price * 1e10 / (10 ** tuple.token.decimals);
         if (amountInUsd <= openFeeUsd + tuple.tc.executionFeeUsd) {
@@ -245,7 +258,7 @@ contract TradingCheckerFacet is ITradingChecker {
         uint leverage_10000 = notionalUsd * 1e4 / marginUsd;
 
         require(
-            checkTp(ot.isLong, ot.takeProfit, ot.entryPrice, leverage_10000, ITradingConfig(address(this)).getTradingConfig().maxTakeProfitP),
+            checkTp(ot.pairBase, ot.isLong, ot.takeProfit, ot.entryPrice, leverage_10000),
             "TradingCheckerFacet: takeProfit is not in the valid range"
         );
     }
@@ -283,7 +296,7 @@ contract TradingCheckerFacet is ITradingChecker {
         // The notional value of the position must be less than or equal to the maximum notional value allowed by pair
         require(notionalUsd <= lms[lms.length - 1].notionalUsd, "TradingCheckerFacet: Position is too large");
 
-        IPairsManager.LeverageMargin memory lm = marginLeverage(lms, notionalUsd);
+        IPairsManager.LeverageMargin memory lm = _marginLeverage(lms, notionalUsd);
         uint openFeeUsd = notionalUsd * pair.feeConfig.openFeeP / 1e4;
         uint amountInUsd = data.amountIn * token.price * 1e10 / (10 ** token.decimals);
         require(amountInUsd > openFeeUsd + tc.executionFeeUsd, "TradingCheckerFacet: The amount is too small");
@@ -297,7 +310,7 @@ contract TradingCheckerFacet is ITradingChecker {
             "TradingCheckerFacet: Exceeds the maximum leverage allowed for the position"
         );
         require(
-            checkTp(data.isLong, data.takeProfit, trialPrice, leverage_10000, tc.maxTakeProfitP),
+            _checkTp(_buildCheckTpTuple(data, trialPrice, leverage_10000)),
             "TradingCheckerFacet: takeProfit is not in the valid range"
         );
         require(
@@ -322,6 +335,10 @@ contract TradingCheckerFacet is ITradingChecker {
             // The total position must be less than or equal to the maximum position allowed for the trading pair
             require(notionalUsd + pairQty.shortQty * trialPrice <= pair.pairConfig.maxShortOiUsd, "TradingCheckerFacet: Short positions have exceeded the maximum allowed");
         }
+    }
+
+    function _buildCheckTpTuple(IBook.OpenDataInput calldata data, uint256 entryPrice, uint256 leverage_10000) private pure returns (CheckTpTuple memory) {
+        return CheckTpTuple(data.pairBase, data.isLong, data.takeProfit, entryPrice, leverage_10000);
     }
 
     struct MarketTradeCallbackCheckTuple {
@@ -349,7 +366,7 @@ contract TradingCheckerFacet is ITradingChecker {
         );
     }
 
-    function marginLeverage(
+    function _marginLeverage(
         IPairsManager.LeverageMargin[] memory lms, uint256 notionalUsd
     ) private pure returns (IPairsManager.LeverageMargin memory) {
         for (UC i = ZERO; i < uc(lms.length); i = i + ONE) {
@@ -384,7 +401,7 @@ contract TradingCheckerFacet is ITradingChecker {
             return (false, 0, 0, tuple.entryPrice, Refund.MAX_NOTIONAL_USD);
         }
 
-        IPairsManager.LeverageMargin memory lm = marginLeverage(lms, tuple.notionalUsd);
+        IPairsManager.LeverageMargin memory lm = _marginLeverage(lms, tuple.notionalUsd);
         uint openFeeUsd = tuple.notionalUsd * tuple.pair.feeConfig.openFeeP / 1e4;
         uint amountInUsd = pt.amountIn * tuple.token.price * 1e10 / (10 ** tuple.token.decimals);
         if (amountInUsd <= openFeeUsd + tuple.tc.executionFeeUsd) {
@@ -399,7 +416,7 @@ contract TradingCheckerFacet is ITradingChecker {
             return (false, 0, 0, tuple.entryPrice, Refund.MAX_LEVERAGE);
         }
 
-        if (!checkTp(pt.isLong, pt.takeProfit, tuple.entryPrice, leverage_10000, tuple.tc.maxTakeProfitP)) {
+        if (!_checkTp(_buildCheckTpTuple(pt, tuple.entryPrice, leverage_10000))) {
             return (false, 0, 0, tuple.entryPrice, Refund.TP);
         }
 
@@ -434,6 +451,10 @@ contract TradingCheckerFacet is ITradingChecker {
         );
     }
 
+    function _buildCheckTpTuple(ITrading.PendingTrade calldata pt, uint256 entryPrice, uint256 leverage_10000) private pure returns (CheckTpTuple memory) {
+        return CheckTpTuple(pt.pairBase, pt.isLong, pt.takeProfit, entryPrice, leverage_10000);
+    }
+
     function executeLiquidateCheck(
         ITrading.OpenTrade calldata ot, uint256 marketPrice, uint256 closePrice
     ) external view returns (bool needLiq, int256 pnl, int256 fundingFee, uint256 closeFee, uint256 holdingFee) {
@@ -451,7 +472,7 @@ contract TradingCheckerFacet is ITradingChecker {
             pnl = (int256(uint256(ot.entryPrice) * ot.qty) - int256(closeNotionalUsd)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         }
         int256 loss = int256(closeFee) - fundingFee - pnl + int256(holdingFee);
-        IPairsManager.LeverageMargin memory lm = marginLeverage(pair.leverageMargins, uint256(ot.entryPrice) * ot.qty);
+        IPairsManager.LeverageMargin memory lm = _marginLeverage(pair.leverageMargins, uint256(ot.entryPrice) * ot.qty);
         return (loss > 0 && uint256(loss) * 1e4 >= lm.liqLostP * ot.margin, pnl, fundingFee, closeFee, holdingFee);
     }
 

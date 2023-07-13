@@ -19,7 +19,8 @@ library LibTradingConfig {
         uint24 maxTakeProfitP;
         // ITradingConfig.TradingSwitch
         uint16 tradingSwitches;
-        mapping(address => ITradingConfig.PriceProtection) priceProtections;
+        mapping(address pairBase => ITradingConfig.PriceProtection) priceProtections;
+        mapping(address pairBase => ITradingConfig.MaxTpRatioForLeverage[]) maxTpRatios;
     }
 
     function tradingConfigStorage() internal pure returns (TradingConfigStorage storage tcs) {
@@ -34,6 +35,7 @@ library LibTradingConfig {
     event SetMinNotionalUsd(uint256 oldMinNotionalUsd, uint256 minNotionalUsd);
     event SetMaxTakeProfitP(uint24 oldMaxTakeProfitP, uint24 maxTakeProfitP);
     event UpdateProtectionPrice(address indexed pairBase, uint64 upperPrice, uint64 lowerPrice);
+    event SetMaxTpRatioForLeverage(address indexed pairBase, ITradingConfig.MaxTpRatioForLeverage[] maxTpRatios);
 
     function initialize(uint256 executionFeeUsd, uint256 minNotionalUsd, uint24 maxTakeProfitP) internal {
         TradingConfigStorage storage tcs = tradingConfigStorage();
@@ -95,5 +97,20 @@ library LibTradingConfig {
             tcs.priceProtections[pc.pairBase] = ITradingConfig.PriceProtection(uint40(block.timestamp), pc.upperPrice, pc.lowerPrice);
             emit UpdateProtectionPrice(pc.pairBase, pc.upperPrice, pc.lowerPrice);
         }
+    }
+
+    function setMaxTpRatioForLeverage(address pairBase, ITradingConfig.MaxTpRatioForLeverage[] calldata maxTpRatios) internal {
+        delete tradingConfigStorage().maxTpRatios[pairBase];
+        ITradingConfig.MaxTpRatioForLeverage[] storage tpRatios = tradingConfigStorage().maxTpRatios[pairBase];
+        UC size = uc(maxTpRatios.length);
+        for (UC i = ZERO; i < size; i = i + ONE) {
+            ITradingConfig.MaxTpRatioForLeverage calldata tpRatio = maxTpRatios[i.into()];
+            if (i + ONE < size) {
+                ITradingConfig.MaxTpRatioForLeverage calldata nextTpRatio = maxTpRatios[(i + ONE).into()];
+                require(tpRatio.leverage < nextTpRatio.leverage, "LibTradingConfig: leverage multipliers need to be in the order from smallest to largest");
+            }
+            tpRatios.push(tpRatio);
+        }
+        emit SetMaxTpRatioForLeverage(pairBase, maxTpRatios);
     }
 }

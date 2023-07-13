@@ -8,6 +8,7 @@ interface ITradingConfig {
     event SetMinNotionalUsd(uint256 oldMinNotionalUsd, uint256 minNotionalUsd);
     event SetMaxTakeProfitP(uint24 oldMaxTakeProfitP, uint24 maxTakeProfitP);
     event UpdateProtectionPrice(address indexed pairBase, uint64 upperPrice, uint64 lowerPrice);
+    event SetMaxTpRatioForLeverage(address indexed pairBase, MaxTpRatioForLeverage[] maxTpRatios);
 
     /*
     |-----------> 8 bit <-----------|
@@ -48,6 +49,11 @@ interface ITradingConfig {
         uint64 lowerPrice;  // 1e8
     }
 
+    struct MaxTpRatioForLeverage {
+        uint16 leverage;
+        uint24 maxTakeProfitP;
+    }
+
     function getTradingConfig() external view returns (TradingConfig memory);
 
     function setTradingSwitches(
@@ -63,5 +69,11 @@ interface ITradingConfig {
 
     function updateProtectionPrice(PriceConfig[] calldata priceConfigs) external;
 
+    function setMaxTpRatioForLeverage(address pairBase, MaxTpRatioForLeverage[] calldata maxTpRatios) external;
+
     function getProtectionPrice(address pairBase) external view returns (PriceProtection memory);
+
+    function getPairMaxTpRatios(address pairBase) external view returns (MaxTpRatioForLeverage[] memory);
+
+    function getPairMaxTpRatio(address pairBase, uint256 leverage_10000) external view returns (uint24);
 }

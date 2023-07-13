@@ -23,7 +23,12 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
     function closeTradeCallback(bytes32 tradeHash, uint upperPrice, uint lowerPrice) external onlySelf override {
         LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
         OpenTrade storage ot = ts.openTrades[tradeHash];
-        uint256 marketPrice = ot.isLong ? lowerPrice : upperPrice;
+        uint256 marketPrice;
+        if (ot.isLong) {
+            marketPrice = lowerPrice < ot.takeProfit ? lowerPrice : ot.takeProfit;
+        } else {
+            marketPrice = upperPrice > ot.takeProfit ? upperPrice : ot.takeProfit;
+        }
         uint256 closePrice = ITradingCore(address(this)).slippagePrice(ot.pairBase, marketPrice, ot.qty, !ot.isLong);
 
         if (!ITradingChecker(address(this)).checkProtectionPrice(ot.pairBase, closePrice, !ot.isLong)) {
