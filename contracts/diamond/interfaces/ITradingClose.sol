@@ -11,7 +11,6 @@ interface ITradingClose is ITrading {
     event CloseTradeReceived(address indexed user, bytes32 indexed tradeHash, address indexed token, uint256 amount);
     event CloseTradeAddLiquidity(address indexed token, uint256 amount);
     event ExecuteCloseRejected(address indexed user, bytes32 indexed tradeHash, ExecutionType executionType, uint64 execPrice, uint64 marketPrice);
-    event CloseRejectedByProtectionPrice(address indexed user, bytes32 indexed tradeHash, uint256 closePrice);
 
     enum ExecutionType {TP, SL, LIQ}
     struct TpSlOrLiq {

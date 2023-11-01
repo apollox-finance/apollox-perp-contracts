@@ -1,28 +1,37 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "../../utils/TransferHelper.sol";
+import "../security/OnlySelf.sol";
 import "../interfaces/IVault.sol";
 import "../interfaces/ITradingPortal.sol";
-import "../interfaces/IPriceFacade.sol";
+import {RequestType, IPriceFacade} from "../interfaces/IPriceFacade.sol";
 import "../interfaces/IPairsManager.sol";
 import "../interfaces/ITradingConfig.sol";
 import "../interfaces/ITradingChecker.sol";
 import "../libraries/LibTrading.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
-import "../security/OnlySelf.sol";
 
 contract TradingPortalFacet is ITradingPortal, OnlySelf {
 
-    using SafeERC20 for IERC20;
+    using TransferHelper for address;
 
     function _check(ITrading.OpenTrade storage ot) internal view {
         require(ot.margin > 0, "TradingPortalFacet: Trade information does not exist");
         require(ot.user == msg.sender, "TradingPortalFacet: Can only be updated by yourself");
     }
 
-    function openMarketTrade(OpenDataInput calldata data) external override {
+    function openMarketTrade(OpenDataInput memory data) external override {
+        _openMarketTrade(data);
+    }
+
+    function openMarketTradeBNB(OpenDataInput memory data) external payable override {
+        data.tokenIn = TransferHelper.nativeWrapped();
+        data.amountIn = uint96(msg.value);
+        _openMarketTrade(data);
+    }
+
+    function _openMarketTrade(OpenDataInput memory data) private {
         ITradingChecker(address(this)).openMarketTradeCheck(data);
 
         LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
@@ -31,12 +40,12 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
             user, data.broker, data.isLong, data.price, data.pairBase, data.amountIn,
             data.tokenIn, data.qty, data.stopLoss, data.takeProfit, uint128(block.number)
         );
-        bytes32 tradeHash = keccak256(abi.encode(pt, ts.salt, "trade", block.number, block.timestamp));
+        bytes32 tradeHash = keccak256(abi.encode(pt, ts.salt, "trade"));
         ts.salt++;
         ts.pendingTrades[tradeHash] = pt;
-        IERC20(data.tokenIn).safeTransferFrom(user, address(this), data.amountIn);
+        data.tokenIn.transferFrom(user, data.amountIn);
         ts.pendingTradeAmountIns[data.tokenIn] += data.amountIn;
-        IPriceFacade(address(this)).requestPrice(tradeHash, data.pairBase, true);
+        IPriceFacade(address(this)).requestPrice(tradeHash, data.pairBase, RequestType.OPEN);
         emit MarketPendingTrade(user, tradeHash, data);
     }
 
@@ -94,7 +103,7 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
             UC index = ZERO;
             for (UC i = ZERO; i < uc(tokenIns.length); i = i + ONE) {
                 IVault.MarginToken memory mt = IVault(address(this)).getTokenForTrading(tokenIns[i.into()]);
-                if (mt.asMargin && ts.openTradeAmountIns[tokenIns[i.into()]] > 0) {
+                if (mt.switchOn && ts.openTradeAmountIns[tokenIns[i.into()]] > 0) {
                     uint balanceUsd = mt.price * ts.openTradeAmountIns[tokenIns[i.into()]] * 1e10 / (10 ** mt.decimals);
                     balances[index.into()] = MarginBalance(tokenIns[i.into()], mt.price, mt.decimals, balanceUsd);
                     totalBalanceUsd += balanceUsd;
@@ -120,7 +129,7 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
     ) private {
         uint lpFundingFee = lpReceiveFundingFeeUsd * share * (10 ** mb.decimals) / (1e4 * 1e10 * mb.price);
         ts.openTradeAmountIns[mb.token] -= lpFundingFee;
-        IVault(address(this)).increaseByCloseTrade(mb.token, lpFundingFee);
+        IVault(address(this)).increase(mb.token, lpFundingFee);
         emit FundingFeeAddLiquidity(mb.token, lpFundingFee);
     }
 
@@ -133,10 +142,10 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
             IPairsManager(address(this)).getPairForTrading(ot.pairBase).status != IPairsManager.PairStatus.CLOSE,
             "TradingPortalFacet: pair does not support close position"
         );
-        IPriceFacade(address(this)).requestPrice(tradeHash, ot.pairBase, false);
+        IPriceFacade(address(this)).requestPrice(tradeHash, ot.pairBase, RequestType.CLOSE);
     }
 
-    function addMargin(bytes32 tradeHash, uint96 amount) external override {
+    function addMargin(bytes32 tradeHash, uint96 amount) external payable override {
         require(amount > 0, "TradingPortalFacet: amount must be greater than 0");
         LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
         OpenTrade storage ot = ts.openTrades[tradeHash];
@@ -145,7 +154,7 @@ contract TradingPortalFacet is ITradingPortal, OnlySelf {
         ot.margin += amount;
         ts.openTradeAmountIns[ot.tokenIn] += amount;
         IOrderAndTradeHistory(address(this)).updateMargin(tradeHash, ot.margin);
-        IERC20(ot.tokenIn).safeTransferFrom(msg.sender, address(this), amount);
+        ot.tokenIn.transferFrom(msg.sender, amount);
         emit UpdateMargin(msg.sender, tradeHash, beforeMargin, ot.margin);
     }
 }

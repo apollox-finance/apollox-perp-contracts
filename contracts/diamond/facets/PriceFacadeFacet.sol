@@ -22,6 +22,12 @@ contract PriceFacadeFacet is IPriceFacade, OnlySelf {
         LibPriceFacade.setLowAndHighPriceGapP(lowPriceGapP, highPriceGapP);
     }
 
+    function setTriggerLowAndHighPriceGapP(uint16 triggerLowPriceGapP, uint16 triggerHighPriceGapP) external override {
+        LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
+        require(triggerLowPriceGapP > 0 || triggerHighPriceGapP > 0, "PriceFacadeFacet: Update at least one");
+        LibPriceFacade.setTriggerLowAndHighPriceGapP(triggerLowPriceGapP, triggerHighPriceGapP);
+    }
+
     function setMaxDelay(uint16 maxDelay) external override {
         LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
         require(maxDelay > 0, "PriceFacadeFacet: maxDelay must be greater than 0");
@@ -30,7 +36,7 @@ contract PriceFacadeFacet is IPriceFacade, OnlySelf {
 
     function getPriceFacadeConfig() external view override returns (Config memory) {
         LibPriceFacade.PriceFacadeStorage storage pfs = LibPriceFacade.priceFacadeStorage();
-        return Config(pfs.lowPriceGapP, pfs.highPriceGapP, pfs.maxDelay);
+        return Config(pfs.lowPriceGapP, pfs.highPriceGapP, pfs.maxDelay, pfs.triggerLowPriceGapP, pfs.triggerHighPriceGapP);
     }
 
     function getPrice(address token) external view override returns (uint256) {
@@ -41,8 +47,8 @@ contract PriceFacadeFacet is IPriceFacade, OnlySelf {
         return LibPriceFacade.getPriceFromCacheOrOracle(token);
     }
 
-    function requestPrice(bytes32 tradeHash, address token, bool isOpen) external onlySelf override {
-        LibPriceFacade.requestPrice(tradeHash, token, isOpen);
+    function requestPrice(bytes32 tradeHash, address token, RequestType requestType) external onlySelf override {
+        LibPriceFacade.requestPrice(tradeHash, token, requestType);
     }
 
     function requestPriceCallback(bytes32 requestId, uint64 price) external override {
@@ -56,13 +62,13 @@ contract PriceFacadeFacet is IPriceFacade, OnlySelf {
         (uint64 beforePrice,) = LibPriceFacade.getPriceFromCacheOrOracle(pfs, token);
         uint64 priceGap = price > beforePrice ? price - beforePrice : beforePrice - price;
         uint gapPercentage = priceGap * 1e4 / beforePrice;
-        if (gapPercentage > pfs.highPriceGapP) {
+        if (gapPercentage > pfs.triggerHighPriceGapP) {
             return (false, 0, 0);
         }
         pfs.callbackPrices[token] = LibPriceFacade.LatestCallbackPrice(price, uint40(block.timestamp));
 
         (upper, lower) = (price, price);
-        if (gapPercentage >= pfs.lowPriceGapP) {
+        if (gapPercentage >= pfs.triggerLowPriceGapP) {
             (upper, lower) = price > beforePrice ? (price, beforePrice) : (beforePrice, price);
         }
         return (true, upper, lower);

@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "../../utils/TransferHelper.sol";
 import "../interfaces/IBook.sol";
 import "../interfaces/ITradingOpen.sol";
 import "../interfaces/ILimitOrder.sol";
 import "../interfaces/ITradingChecker.sol";
 import "../interfaces/IOrderAndTradeHistory.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 library LibLimitOrder {
 
-    using SafeERC20 for IERC20;
+    using TransferHelper for address;
 
     bytes32 constant LIMIT_ORDER_POSITION = keccak256("apollox.limit.order.storage");
 
@@ -43,7 +42,7 @@ library LibLimitOrder {
         require(order.user == msg.sender, "LibLimitOrder: Can only be updated by yourself");
     }
 
-    function openLimitOrder(IBook.OpenDataInput calldata data) internal {
+    function openLimitOrder(IBook.OpenDataInput memory data) internal {
         LimitOrderStorage storage los = limitOrderStorage();
         address user = msg.sender;
         bytes32[] storage orderHashes = los.userLimitOrderHashes[user];
@@ -51,11 +50,11 @@ library LibLimitOrder {
             user, uint32(orderHashes.length), data.price, data.pairBase, data.amountIn,
             data.tokenIn, data.isLong, data.broker, data.stopLoss, data.qty, data.takeProfit, uint40(block.timestamp)
         );
-        bytes32 orderHash = keccak256(abi.encode(order, los.salt, "order", block.number, block.timestamp));
+        bytes32 orderHash = keccak256(abi.encode(order, los.salt, "order"));
         los.salt++;
         los.limitOrders[orderHash] = order;
         orderHashes.push(orderHash);
-        IERC20(data.tokenIn).safeTransferFrom(user, address(this), data.amountIn);
+        data.tokenIn.transferFrom(user, data.amountIn);
         los.limitOrderAmountIns[data.tokenIn] += data.amountIn;
         _createLimitOrder(orderHash, order);
         emit OpenLimitOrder(user, orderHash, data);
@@ -82,7 +81,7 @@ library LibLimitOrder {
         // it is recommended to retrieve the necessary information for the safeTransfer function beforehand.
         (address tokenIn, address user, uint256 amountIn) = (order.tokenIn, order.user, order.amountIn);
         _removeOrder(los, order, orderHash);
-        IERC20(tokenIn).safeTransfer(user, amountIn);
+        tokenIn.transfer(user, amountIn);
         emit CancelLimitOrder(msg.sender, orderHash);
     }
 
@@ -99,11 +98,14 @@ library LibLimitOrder {
                 return;
             } else {
                 _cancelLimitOrder(orderHash, IOrderAndTradeHistory.ActionType.SYSTEM_CANCEL);
-                IERC20(order.tokenIn).safeTransfer(order.user, order.amountIn);
-                emit LimitOrderRefund(order.user, orderHash, refund);
+                (address tokenIn, address user, uint256 amountIn) = (order.tokenIn, order.user, order.amountIn);
+                // remove open order
+                _removeOrder(los, order, orderHash);
+
+                tokenIn.transfer(user, amountIn);
+                emit LimitOrderRefund(user, orderHash, refund);
             }
         } else {
-            IERC20(order.tokenIn).safeTransfer(msg.sender, executionFee);
             ITradingOpen(address(this)).limitOrderDeal(
                 ITradingOpen.LimitOrder(
                     orderHash, order.user, order.limitPrice, order.pairBase, order.tokenIn,
@@ -113,9 +115,11 @@ library LibLimitOrder {
                 marketPrice
             );
             emit ExecuteLimitOrderSuccessful(order.user, orderHash);
+            address tokenIn = order.tokenIn;
+            // remove open order
+            _removeOrder(los, order, orderHash);
+            tokenIn.transfer(msg.sender, executionFee);
         }
-        // remove open order
-        _removeOrder(los, order, orderHash);
     }
 
     function _removeOrder(

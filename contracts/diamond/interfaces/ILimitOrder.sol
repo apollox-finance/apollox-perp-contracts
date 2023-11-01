@@ -45,7 +45,9 @@ interface ILimitOrder is IBook {
         uint40 timestamp;
     }
 
-    function openLimitOrder(OpenDataInput calldata openData) external;
+    function openLimitOrder(OpenDataInput memory openData) external;
+
+    function openLimitOrderBNB(OpenDataInput memory openData) external payable;
 
     function updateOrderTp(bytes32 orderHash, uint64 takeProfit) external;
 

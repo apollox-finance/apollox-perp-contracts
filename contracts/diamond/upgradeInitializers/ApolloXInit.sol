@@ -17,5 +17,10 @@ contract ApolloXInit {
         ds.supportedInterfaces[type(IERC165).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondCut).interfaceId] = true;
         ds.supportedInterfaces[type(IDiamondLoupe).interfaceId] = true;
+
+        LibAccessControlEnumerable.AccessControlStorage storage acs = LibAccessControlEnumerable.accessControlStorage();
+        acs.supportedInterfaces[type(IERC165).interfaceId] = true;
+        acs.supportedInterfaces[type(IAccessControl).interfaceId] = true;
+        acs.supportedInterfaces[type(IAccessControlEnumerable).interfaceId] = true;
     }
 }

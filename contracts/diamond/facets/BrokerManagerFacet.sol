@@ -9,25 +9,23 @@ import "../libraries/LibAccessControlEnumerable.sol";
 contract BrokerManagerFacet is IBrokerManager {
 
     function initBrokerManagerFacet(
-        uint24 id, uint16 commissionP, address receiver,
-        string calldata name, string calldata url
+        uint24 id, address receiver, string calldata name, string calldata url
     ) external {
         require(id > 0, "BrokerManagerFacet: Id must be greater than 0");
-        require(commissionP >= 0 && commissionP <= Constants.MAX_COMMISSION_P, "BrokerManagerFacet: Invalid commissionP");
         require(receiver != address(0), "BrokerManagerFacet: receiver cannot be 0 address");
         LibAccessControlEnumerable.checkRole(Constants.DEPLOYER_ROLE);
-        LibBrokerManager.initialize(id, commissionP, receiver, name, url);
+        LibBrokerManager.initialize(id, receiver, name, url);
     }
 
     function addBroker(
-        uint24 id, uint16 commissionP, address receiver,
-        string calldata name, string calldata url
+        uint24 id, uint16 commissionP, uint16 daoShareP, uint16 alpPoolP,
+        address receiver, string calldata name, string calldata url
     ) external override {
-        LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
         require(id > 0, "BrokerManagerFacet: Id must be greater than 0");
-        require(commissionP >= 0 && commissionP <= Constants.MAX_COMMISSION_P, "BrokerManagerFacet: Invalid commissionP");
+        require(commissionP + daoShareP + alpPoolP <= 1e4, "BrokerManagerFacet: Invalid proportions");
         require(receiver != address(0), "BrokerManagerFacet: receiver cannot be 0 address");
-        LibBrokerManager.addBroker(id, commissionP, receiver, name, url);
+        LibBrokerManager.addBroker(id, commissionP, daoShareP, alpPoolP, receiver, name, url);
     }
 
     function removeBroker(uint24 id) external override {
@@ -36,11 +34,11 @@ contract BrokerManagerFacet is IBrokerManager {
         LibBrokerManager.removeBroker(id);
     }
 
-    function updateBrokerCommissionP(uint24 id, uint16 commissionP) external override {
+    function updateBrokerCommissionP(uint24 id, uint16 commissionP, uint16 daoShareP, uint16 alpPoolP) external override {
         LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
         require(id > 0, "BrokerManagerFacet: Id must be greater than 0");
-        require(commissionP >= 0 && commissionP <= Constants.MAX_COMMISSION_P, "BrokerManagerFacet: Invalid commissionP");
-        LibBrokerManager.updateBrokerCommissionP(id, commissionP);
+        require(commissionP + daoShareP + alpPoolP <= 1e4, "BrokerManagerFacet: Invalid proportions");
+        LibBrokerManager.updateBrokerCommissionP(id, commissionP, daoShareP, alpPoolP);
     }
 
     function updateBrokerReceiver(uint24 id, address receiver) external override {
@@ -75,7 +73,7 @@ contract BrokerManagerFacet is IBrokerManager {
             LibBrokerManager.Commission memory c = bms.brokerCommissions[id][tokens[i]];
             commissions[i] = CommissionInfo(tokens[i], c.total, c.pending);
         }
-        return BrokerInfo(b.name, b.url, b.receiver, b.id, b.commissionP, commissions);
+        return BrokerInfo(b.name, b.url, b.receiver, b.id, b.commissionP, b.daoShareP, b.alpPoolP, commissions);
     }
 
     function brokers(uint start, uint8 length) external view override returns (BrokerInfo[] memory) {

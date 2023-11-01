@@ -53,11 +53,6 @@ contract TradingCheckerFacet is ITradingChecker {
         }
     }
 
-    function checkProtectionPrice(address pairBase, uint256 price, bool isLong) public view override returns (bool) {
-        ITradingConfig.PriceProtection memory pp = ITradingConfig(address(this)).getProtectionPrice(pairBase);
-        return (isLong && price > pp.lowerPrice) || (!isLong && price < pp.upperPrice);
-    }
-
     function checkLimitOrderTp(ILimitOrder.LimitOrder calldata order) external view override {
         IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(order.tokenIn);
 
@@ -91,7 +86,7 @@ contract TradingCheckerFacet is ITradingChecker {
         _checkParameters(data);
 
         IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(data.tokenIn);
-        require(token.asMargin, "TradingCheckerFacet: This token is not supported as margin");
+        require(token.switchOn, "TradingCheckerFacet: This token is not supported as margin");
 
         IPairsManager.TradingPair memory pair = IPairsManager(address(this)).getPairForTrading(data.pairBase);
         require(pair.status == IPairsManager.PairStatus.AVAILABLE, "TradingCheckerFacet: The pair is temporarily unavailable for trading");
@@ -235,9 +230,6 @@ contract TradingCheckerFacet is ITradingChecker {
                 return (false, 0, 0, Refund.OPEN_LOST);
             }
         }
-        if (!checkProtectionPrice(order.pairBase, order.limitPrice, order.isLong)) {
-            return (false, 0, 0, Refund.PRICE_PROTECTION);
-        }
         return (true,
             uint96(openFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
             uint96(tuple.tc.executionFeeUsd * (10 ** tuple.token.decimals) / (1e10 * tuple.token.price)),
@@ -267,7 +259,7 @@ contract TradingCheckerFacet is ITradingChecker {
         _checkParameters(data);
 
         IVault.MarginToken memory token = IVault(address(this)).getTokenForTrading(data.tokenIn);
-        require(token.asMargin, "TradingCheckerFacet: This token is not supported as margin");
+        require(token.switchOn, "TradingCheckerFacet: This token is not supported as margin");
 
         IPairsManager.TradingPair memory pair = IPairsManager(address(this)).getPairForTrading(data.pairBase);
         require(pair.status == IPairsManager.PairStatus.AVAILABLE, "TradingCheckerFacet: The pair is temporarily unavailable for trading");
@@ -284,8 +276,6 @@ contract TradingCheckerFacet is ITradingChecker {
             (data.isLong && trialPrice <= data.price) || (!data.isLong && trialPrice >= data.price),
             "TradingCheckerFacet: Unable to trading at a price acceptable to the user"
         );
-
-        require(checkProtectionPrice(data.pairBase, trialPrice, data.isLong), "TradingCheckerFacet: Price protection");
 
         // price * qty * 10^18 / 10^(8+10) = price * qty
         uint notionalUsd = trialPrice * data.qty;
@@ -309,10 +299,10 @@ contract TradingCheckerFacet is ITradingChecker {
             leverage_10000 <= uint(1e4) * lm.maxLeverage,
             "TradingCheckerFacet: Exceeds the maximum leverage allowed for the position"
         );
-        require(
-            _checkTp(_buildCheckTpTuple(data, trialPrice, leverage_10000)),
-            "TradingCheckerFacet: takeProfit is not in the valid range"
-        );
+        //require(
+        //    _checkTp(_buildCheckTpTuple(data, trialPrice, leverage_10000)),
+        //    "TradingCheckerFacet: takeProfit is not in the valid range"
+        //);
         require(
             checkSl(data.isLong, data.stopLoss, trialPrice),
             "TradingCheckerFacet: stopLoss is not in the valid range"
@@ -337,9 +327,9 @@ contract TradingCheckerFacet is ITradingChecker {
         }
     }
 
-    function _buildCheckTpTuple(IBook.OpenDataInput calldata data, uint256 entryPrice, uint256 leverage_10000) private pure returns (CheckTpTuple memory) {
-        return CheckTpTuple(data.pairBase, data.isLong, data.takeProfit, entryPrice, leverage_10000);
-    }
+    //function _buildCheckTpTuple(IBook.OpenDataInput calldata data, uint256 entryPrice, uint256 leverage_10000) private pure returns (CheckTpTuple memory) {
+    //    return CheckTpTuple(data.pairBase, data.isLong, data.takeProfit, entryPrice, leverage_10000);
+    //}
 
     struct MarketTradeCallbackCheckTuple {
         IPairsManager.TradingPair pair;
@@ -387,9 +377,6 @@ contract TradingCheckerFacet is ITradingChecker {
         MarketTradeCallbackCheckTuple memory tuple = _buildMarketTradeCallbackCheckTuple(pt, marketPrice);
         if ((pt.isLong && tuple.entryPrice > pt.price) || (!pt.isLong && tuple.entryPrice < pt.price)) {
             return (false, 0, 0, tuple.entryPrice, Refund.USER_PRICE);
-        }
-        if (!checkProtectionPrice(pt.pairBase, tuple.entryPrice, pt.isLong)) {
-            return (false, 0, 0, 0, Refund.PRICE_PROTECTION);
         }
 
         if (tuple.notionalUsd < tuple.tc.minNotionalUsd) {
@@ -464,13 +451,13 @@ contract TradingCheckerFacet is ITradingChecker {
         fundingFee = LibTrading.calcFundingFee(ot, mt, marketPrice);
 
         uint256 closeNotionalUsd = closePrice * ot.qty;
-        closeFee = closeNotionalUsd * pair.feeConfig.closeFeeP * (10 ** mt.decimals) / (1e4 * 1e10 * mt.price);
         holdingFee = _calcHoldingFee(ot, mt);
         if (ot.isLong) {
             pnl = (int256(closeNotionalUsd) - int256(uint256(ot.entryPrice) * ot.qty)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         } else {
             pnl = (int256(uint256(ot.entryPrice) * ot.qty) - int256(closeNotionalUsd)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         }
+        closeFee = LibTrading.calcCloseFee(pair.feeConfig, mt, closeNotionalUsd, pnl);
         int256 loss = int256(closeFee) - fundingFee - pnl + int256(holdingFee);
         IPairsManager.LeverageMargin memory lm = _marginLeverage(pair.leverageMargins, uint256(ot.entryPrice) * ot.qty);
         return (loss > 0 && uint256(loss) * 1e4 >= lm.liqLostP * ot.margin, pnl, fundingFee, closeFee, holdingFee);

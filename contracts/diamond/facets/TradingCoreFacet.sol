@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 import "../security/OnlySelf.sol";
 import "../interfaces/ITradingCore.sol";
+import "../interfaces/IPriceFacade.sol";
 import "../interfaces/IPairsManager.sol";
 import "../interfaces/ITradingPortal.sol";
 import "../interfaces/ISlippageManager.sol";
@@ -110,6 +111,26 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
     ) external onlySelf override returns (int256 longAccFundingFeePerShare){
         LibTradingCore.TradingCoreStorage storage tcs = LibTradingCore.tradingCoreStorage();
         PairPositionInfo storage ppi = tcs.pairPositionInfos[pairBase];
+        _updatePairPositionInfo(ppi, pairBase, marketPrice);
+
+        longAccFundingFeePerShare = ppi.longAccFundingFeePerShare;
+        _updatePairQtyAndAvgPrice(tcs, ppi, pairBase, qty, userPrice, isOpen, isLong);
+        emit UpdatePairPositionInfo(
+            pairBase, ppi.lastFundingFeeBlock, ppi.longQty, ppi.shortQty,
+            longAccFundingFeePerShare, ppi.lpLongAvgPrice, ppi.lpShortAvgPrice
+        );
+        return longAccFundingFeePerShare;
+    }
+
+    function updatePairPositionInfo(address pairBase) external override {
+        (uint256 marketPrice,) = IPriceFacade(address(this)).getPriceFromCacheOrOracle(pairBase);
+        LibTradingCore.TradingCoreStorage storage tcs = LibTradingCore.tradingCoreStorage();
+        PairPositionInfo storage ppi = tcs.pairPositionInfos[pairBase];
+        _updatePairPositionInfo(ppi, pairBase, marketPrice);
+        emit UpdatePairAccFundingFeePerShare(pairBase, ppi.lastFundingFeeBlock, ppi.longAccFundingFeePerShare, marketPrice);
+    }
+
+    function _updatePairPositionInfo(PairPositionInfo storage ppi, address pairBase, uint marketPrice) private {
         if (ppi.longQty > 0 || ppi.shortQty > 0) {
             uint256 lpReceiveFundingFeeUsd = _updateFundingFee(ppi, pairBase, marketPrice);
             if (lpReceiveFundingFeeUsd > 0) {
@@ -118,13 +139,6 @@ contract TradingCoreFacet is ITradingCore, OnlySelf {
         } else {
             ppi.lastFundingFeeBlock = block.number;
         }
-        longAccFundingFeePerShare = ppi.longAccFundingFeePerShare;
-        _updatePairQtyAndAvgPrice(tcs, ppi, pairBase, qty, userPrice, isOpen, isLong);
-        emit UpdatePairPositionInfo(
-            pairBase, ppi.lastFundingFeeBlock, ppi.longQty, ppi.shortQty,
-            longAccFundingFeePerShare, ppi.lpLongAvgPrice, ppi.lpShortAvgPrice
-        );
-        return longAccFundingFeePerShare;
     }
 
     function _updateFundingFee(

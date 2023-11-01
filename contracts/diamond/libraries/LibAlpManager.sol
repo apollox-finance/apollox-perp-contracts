@@ -66,16 +66,7 @@ library LibAlpManager {
     function mintAlp(address account, address tokenIn, uint256 amount) internal returns (uint256 alpAmount){
         LibVault.AvailableToken memory at = LibVault.vaultStorage().tokens[tokenIn];
         alpAmount = _calculateAlpAmount(at, amount);
-        LibVault.deposit(tokenIn, amount, account, false);
-        _addMinted(account);
-        emit MintAddLiquidity(account, tokenIn, amount);
-    }
-
-    function mintAlpBNB(address account, uint256 amount) internal returns (uint256 alpAmount){
-        address tokenIn = LibVault.WBNB();
-        LibVault.AvailableToken memory at = LibVault.vaultStorage().tokens[tokenIn];
-        alpAmount = _calculateAlpAmount(at, amount);
-        LibVault.depositBNB(amount);
+        IVault(address(this)).increase(tokenIn, amount);
         _addMinted(account);
         emit MintAddLiquidity(account, tokenIn, amount);
     }
@@ -98,22 +89,11 @@ library LibAlpManager {
         alpManagerStorage().lastMintedAt[account] = block.timestamp;
     }
 
-    function burnAlp(address account, address tokenOut, uint256 alpAmount, address receiver) internal returns (uint256 amountOut) {
+    function burnAlp(address account, address tokenOut, uint256 alpAmount) internal returns (uint256 amountOut) {
         AlpManagerStorage storage ams = alpManagerStorage();
         require(ams.lastMintedAt[account] + ams.coolingDuration <= block.timestamp, "LibAlpManager: Cooling duration not yet passed");
         LibVault.AvailableToken memory at = LibVault.vaultStorage().tokens[tokenOut];
         amountOut = _calculateTokenAmount(at, alpAmount);
-        LibVault.withdraw(receiver, tokenOut, amountOut);
-        emit BurnRemoveLiquidity(account, tokenOut, amountOut);
-    }
-
-    function burnAlpBNB(address account, uint256 alpAmount, address payable receiver) internal returns (uint256 amountOut) {
-        AlpManagerStorage storage ams = alpManagerStorage();
-        require(ams.lastMintedAt[account] + ams.coolingDuration <= block.timestamp, "LibAlpManager: Cooling duration not yet passed");
-        address tokenOut = LibVault.WBNB();
-        LibVault.AvailableToken memory at = LibVault.vaultStorage().tokens[tokenOut];
-        amountOut = _calculateTokenAmount(at, alpAmount);
-        LibVault.withdrawBNB(receiver, amountOut);
         emit BurnRemoveLiquidity(account, tokenOut, amountOut);
     }
 

@@ -4,6 +4,8 @@ pragma solidity ^0.8.19;
 import "../../utils/Constants.sol";
 import "../interfaces/ITradingOpen.sol";
 import "../interfaces/ITradingClose.sol";
+import "../interfaces/IPredictUpDown.sol";
+import {RequestType} from "../interfaces/IPriceFacade.sol";
 import "./LibChainlinkPrice.sol";
 import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
@@ -16,15 +18,15 @@ library LibPriceFacade {
         uint40 timestamp;
     }
 
-    struct OpenOrClose {
+    struct IdInfo {
         bytes32 id;
-        bool isOpen;
+        RequestType requestType;
     }
 
     struct PendingPrice {
         uint256 blockNumber;
         address token;
-        OpenOrClose[] ids;
+        IdInfo[] ids;
     }
 
     struct PriceFacadeStorage {
@@ -35,6 +37,8 @@ library LibPriceFacade {
         uint16 lowPriceGapP;   // 1e4
         uint16 highPriceGapP;  // 1e4
         uint16 maxDelay;
+        uint16 triggerLowPriceGapP;   // 1e4
+        uint16 triggerHighPriceGapP;  // 1e4
     }
 
     function priceFacadeStorage() internal pure returns (PriceFacadeStorage storage pfs) {
@@ -46,6 +50,8 @@ library LibPriceFacade {
 
     event SetLowPriceGapP(uint16 indexed oldLowPriceGapP, uint16 indexed lowPriceGapP);
     event SetHighPriceGapP(uint16 indexed oldHighPriceGapP, uint16 indexed highPriceGapP);
+    event SetTriggerLowPriceGapP(uint16 indexed old, uint16 indexed triggerLowPriceGapP);
+    event SetTriggerHighPriceGapP(uint16 indexed old, uint16 indexed triggerHighPriceGapP);
     event SetMaxDelay(uint16 indexed oldMaxDelay, uint16 indexed maxDelay);
     event RequestPrice(bytes32 indexed requestId, address indexed token);
     event PriceRejected(
@@ -92,6 +98,33 @@ library LibPriceFacade {
         }
     }
 
+    function _setTriggerLowPriceGapP(PriceFacadeStorage storage pfs, uint16 triggerLowPriceGapP) private {
+        uint16 old = pfs.triggerLowPriceGapP;
+        pfs.triggerLowPriceGapP = triggerLowPriceGapP;
+        emit SetTriggerLowPriceGapP(old, triggerLowPriceGapP);
+    }
+
+    function _setTriggerHighPriceGapP(PriceFacadeStorage storage pfs, uint16 triggerHighPriceGapP) private {
+        uint16 old = pfs.triggerHighPriceGapP;
+        pfs.triggerHighPriceGapP = triggerHighPriceGapP;
+        emit SetTriggerHighPriceGapP(old, triggerHighPriceGapP);
+    }
+
+    function setTriggerLowAndHighPriceGapP(uint16 triggerLowPriceGapP, uint16 triggerHighPriceGapP) internal {
+        PriceFacadeStorage storage pfs = priceFacadeStorage();
+        if (triggerLowPriceGapP > 0 && triggerHighPriceGapP > 0) {
+            require(triggerHighPriceGapP > triggerLowPriceGapP, "LibPriceFacade: triggerHighPriceGapP must be greater than triggerLowPriceGapP");
+            _setTriggerLowPriceGapP(pfs, triggerLowPriceGapP);
+            _setTriggerHighPriceGapP(pfs, triggerHighPriceGapP);
+        } else if (triggerLowPriceGapP > 0) {
+            require(pfs.triggerHighPriceGapP > triggerLowPriceGapP, "LibPriceFacade: triggerHighPriceGapP must be greater than triggerLowPriceGapP");
+            _setTriggerLowPriceGapP(pfs, triggerLowPriceGapP);
+        } else {
+            require(triggerHighPriceGapP > pfs.triggerLowPriceGapP, "LibPriceFacade: triggerHighPriceGapP must be greater than triggerLowPriceGapP");
+            _setTriggerHighPriceGapP(pfs, triggerHighPriceGapP);
+        }
+    }
+
     function setMaxDelay(uint16 maxDelay) internal {
         PriceFacadeStorage storage pfs = priceFacadeStorage();
         uint16 old = pfs.maxDelay;
@@ -104,12 +137,12 @@ library LibPriceFacade {
         return decimals == 8 ? price : price * 1e8 / (10 ** decimals);
     }
 
-    function requestPrice(bytes32 id, address token, bool isOpen) internal {
+    function requestPrice(bytes32 id, address token, RequestType requestType) internal {
         PriceFacadeStorage storage pfs = priceFacadeStorage();
         bytes32 requestId = keccak256(abi.encode(token, block.number));
         PendingPrice storage pendingPrice = pfs.pendingPrices[requestId];
         require(pendingPrice.ids.length < Constants.MAX_REQUESTS_PER_PAIR_IN_BLOCK, "LibPriceFacade: The requests for price retrieval are too frequent.");
-        pendingPrice.ids.push(OpenOrClose(id, isOpen));
+        pendingPrice.ids.push(IdInfo(id, requestType));
         if (pendingPrice.blockNumber != block.number) {
             pendingPrice.token = token;
             pendingPrice.blockNumber = block.number;
@@ -120,7 +153,7 @@ library LibPriceFacade {
     function requestPriceCallback(bytes32 requestId, uint64 price) internal {
         PriceFacadeStorage storage pfs = priceFacadeStorage();
         PendingPrice memory pendingPrice = pfs.pendingPrices[requestId];
-        OpenOrClose[] memory ids = pendingPrice.ids;
+        IdInfo[] memory ids = pendingPrice.ids;
         require(pendingPrice.blockNumber > 0 && ids.length > 0, "LibPriceFacade: requestId does not exist");
 
         (uint64 beforePrice, uint40 updatedAt) = getPriceFromCacheOrOracle(pfs, pendingPrice.token);
@@ -147,11 +180,13 @@ library LibPriceFacade {
             (upperPrice, lowerPrice) = price > beforePrice ? (price, beforePrice) : (beforePrice, price);
         }
         for (UC i = ZERO; i < uc(ids.length); i = i + ONE) {
-            OpenOrClose memory openOrClose = ids[i.into()];
-            if (openOrClose.isOpen) {
-                ITradingOpen(address(this)).marketTradeCallback(openOrClose.id, upperPrice, lowerPrice);
+            IdInfo memory idInfo = ids[i.into()];
+            if (idInfo.requestType == RequestType.OPEN) {
+                try ITradingOpen(address(this)).marketTradeCallback(idInfo.id, upperPrice, lowerPrice) {} catch Error(string memory) {}
+            } else if (idInfo.requestType == RequestType.CLOSE) {
+                try ITradingClose(address(this)).closeTradeCallback(idInfo.id, upperPrice, lowerPrice) {} catch Error(string memory) {}
             } else {
-                ITradingClose(address(this)).closeTradeCallback(openOrClose.id, upperPrice, lowerPrice);
+                try IPredictUpDown(address(this)).predictionCallback(idInfo.id, price) {} catch Error(string memory) {}
             }
         }
         // Deleting data can save a little gas
@@ -170,7 +205,7 @@ library LibPriceFacade {
         uint40 updatedAt = cachePrice.timestamp >= oracleUpdatedAt ? cachePrice.timestamp : uint40(oracleUpdatedAt);
         // Take the newer price
         uint64 tokenPrice = cachePrice.timestamp >= oracleUpdatedAt ? cachePrice.price :
-        (decimals == 8 ? uint64(price) : uint64(price * 1e8 / (10 ** decimals)));
+            (decimals == 8 ? uint64(price) : uint64(price * 1e8 / (10 ** decimals)));
         return (tokenPrice, updatedAt);
     }
 }

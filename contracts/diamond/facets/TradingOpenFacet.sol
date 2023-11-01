@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "../../utils/TransferHelper.sol";
 import "../security/OnlySelf.sol";
 import "../interfaces/IFeeManager.sol";
 import "../interfaces/ITradingOpen.sol";
 import "../interfaces/ITradingChecker.sol";
 import "../interfaces/IOrderAndTradeHistory.sol";
 import "../libraries/LibTrading.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract TradingOpenFacet is ITradingOpen, OnlySelf {
 
-    using SafeERC20 for IERC20;
+    using TransferHelper for address;
 
     function limitOrderDeal(LimitOrder memory order, uint256 marketPrice) external onlySelf override {
         LibTrading.TradingStorage storage ts = LibTrading.tradingStorage();
@@ -56,15 +55,22 @@ contract TradingOpenFacet is ITradingOpen, OnlySelf {
         uint256 marketPrice = pt.isLong ? upperPrice : lowerPrice;
         (bool result, uint96 openFee, uint96 executionFee, uint256 entryPrice, ITradingChecker.Refund refund) = ITradingChecker(address(this)).marketTradeCallbackCheck(pt, marketPrice);
         if (!result) {
-            IERC20(pt.tokenIn).safeTransfer(pt.user, pt.amountIn);
-            emit PendingTradeRefund(pt.user, tradeHash, refund);
+            (address tokenIn, address user, uint256 amountIn) = (pt.tokenIn, pt.user, pt.amountIn);
+            // clear pending data
+            ts.pendingTradeAmountIns[tokenIn] -= amountIn;
+            delete ts.pendingTrades[tradeHash];
+
+            tokenIn.transfer(user, amountIn);
+            emit PendingTradeRefund(user, tradeHash, refund);
         } else {
-            IERC20(pt.tokenIn).safeTransfer(tx.origin, executionFee);
             _marketTradeDeal(ts, pt, tradeHash, openFee, executionFee, marketPrice, entryPrice);
+            // clear pending data
+            ts.pendingTradeAmountIns[pt.tokenIn] -= pt.amountIn;
+            address tokenIn = pt.tokenIn;
+            delete ts.pendingTrades[tradeHash];
+
+            tokenIn.transfer(tx.origin, executionFee);
         }
-        // clear pending data
-        ts.pendingTradeAmountIns[pt.tokenIn] -= pt.amountIn;
-        delete ts.pendingTrades[tradeHash];
     }
 
     function _marketTradeDeal(

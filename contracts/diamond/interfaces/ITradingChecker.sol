@@ -19,8 +19,6 @@ interface ITradingChecker {
 
     function checkSl(bool isLong, uint stopLoss, uint entryPrice) external pure returns (bool);
 
-    function checkProtectionPrice(address pairBase, uint256 price, bool isLong) external view returns (bool);
-
     function checkLimitOrderTp(ILimitOrder.LimitOrder calldata order) external view;
 
     function openLimitOrderCheck(IBook.OpenDataInput calldata data) external view;

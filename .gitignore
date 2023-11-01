@@ -1,0 +1,16 @@
+.idea/
+.deps/
+flattens/
+sol2uml/
+*.iml
+
+# truffle
+build/
+node_modules/
+package-lock.json
+
+# foundry
+cache/
+lib/
+out/
+.env
