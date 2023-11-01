@@ -64,6 +64,8 @@ interface IPairsManager {
     struct FeeConfig {
         uint16 openFeeP;     // 1e4
         uint16 closeFeeP;    // 1e4
+        uint24 shareP;       // 1e5
+        uint24 minCloseFeeP; // 1e5
     }
 
     struct TradingPair {
@@ -78,6 +80,12 @@ interface IPairsManager {
         FeeConfig feeConfig;
     }
 
+    struct UpdatePairMaxOiParam {
+        address base;
+        uint256 maxLongOiUsd;
+        uint256 maxShortOiUsd;
+    }
+
     function addPair(
         address base, string calldata name,
         PairType pairType, PairStatus status,
@@ -88,6 +96,8 @@ interface IPairsManager {
     ) external;
 
     function updatePairMaxOi(address base, uint256 maxLongOiUsd, uint256 maxShortOiUsd) external;
+
+    function batchUpdatePairMaxOi(UpdatePairMaxOiParam[] calldata params) external;
 
     function updatePairHoldingFeeRate(address base, uint40 longHoldingFeeRate, uint40 shortHoldingFeeRate) external;
 
@@ -107,9 +117,9 @@ interface IPairsManager {
 
     function updatePairLeverageMargin(address base, LibPairsManager.LeverageMargin[] calldata leverageMargins) external;
 
-    function pairsV2() external view returns (PairView[] memory);
+    function pairsV3() external view returns (PairView[] memory);
 
-    function getPairByBaseV2(address base) external view returns (PairView memory);
+    function getPairByBaseV3(address base) external view returns (PairView memory);
 
     function getPairForTrading(address base) external view returns (TradingPair memory);
 

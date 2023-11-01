@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
-import "../security/OnlySelf.sol";
 import "../../utils/Constants.sol";
+import "../../utils/TransferHelper.sol";
+import "../security/OnlySelf.sol";
 import "../interfaces/IFeeManager.sol";
 import "../interfaces/IPairsManager.sol";
 import "../interfaces/ITradingClose.sol";
@@ -11,13 +12,11 @@ import "../interfaces/IOrderAndTradeHistory.sol";
 import "../libraries/LibTrading.sol";
 import "../libraries/LibAccessControlEnumerable.sol";
 import "@openzeppelin/contracts/utils/Strings.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/utils/math/SignedMath.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 contract TradingCloseFacet is ITradingClose, OnlySelf {
 
-    using SafeERC20 for IERC20;
+    using TransferHelper for address;
     using SignedMath for int256;
 
     function closeTradeCallback(bytes32 tradeHash, uint upperPrice, uint lowerPrice) external onlySelf override {
@@ -30,12 +29,6 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
             marketPrice = upperPrice > ot.takeProfit ? upperPrice : ot.takeProfit;
         }
         uint256 closePrice = ITradingCore(address(this)).slippagePrice(ot.pairBase, marketPrice, ot.qty, !ot.isLong);
-
-        if (!ITradingChecker(address(this)).checkProtectionPrice(ot.pairBase, closePrice, !ot.isLong)) {
-            emit CloseRejectedByProtectionPrice(ot.user, tradeHash, closePrice);
-            return;
-        }
-
         IOrderAndTradeHistory.CloseInfo memory closeInfo = _closeTrade(ts, ot, tradeHash, marketPrice, closePrice);
         _saveCloseTradeHistory(tradeHash, closeInfo, IOrderAndTradeHistory.ActionType.CLOSE);
         emit CloseTradeSuccessful(ot.user, tradeHash, closeInfo);
@@ -57,7 +50,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         } else {
             pnl = (int256(uint256(ot.entryPrice) * ot.qty) - int256(closeNotionalUsd)) * int256(10 ** mt.decimals) / int256(1e10 * mt.price);
         }
-        uint256 closeFee = closeNotionalUsd * IPairsManager(address(this)).getPairFeeConfig(ot.pairBase).closeFeeP * (10 ** mt.decimals) / (1e4 * 1e10 * mt.price);
+        uint256 closeFee = LibTrading.calcCloseFee(IPairsManager(address(this)).getPairFeeConfig(ot.pairBase), mt, closeNotionalUsd, pnl);
         (closeFee, holdingFee) = _settleForCloseTrade(ts, ot, tradeHash, pnl, fundingFee, closeFee, holdingFee);
 
         return IOrderAndTradeHistory.CloseInfo(
@@ -267,7 +260,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
     }
 
     function _closeTradeReceived(bytes32 tradeHash, address to, address token, uint256 amount) private {
-        IERC20(token).safeTransfer(to, amount);
+        token.transfer(to, amount);
         emit CloseTradeReceived(to, tradeHash, token, amount);
     }
 
@@ -292,7 +285,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
             for (UC i = ZERO; i < uc(settleTokens.length); i = i + ONE) {
                 if (settleTokens[i.into()].amount > 0) {
                     if (toLp) {
-                        IVault(address(this)).increaseByCloseTrade(settleTokens[i.into()].token, settleTokens[i.into()].amount);
+                        IVault(address(this)).increase(settleTokens[i.into()].token, settleTokens[i.into()].amount);
                         emit CloseTradeAddLiquidity(settleTokens[i.into()].token, settleTokens[i.into()].amount);
                     } else {
                         LibTrading.increaseOpenTradeAmount(ts, settleTokens[i.into()].token, settleTokens[i.into()].amount);
@@ -316,7 +309,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                             userReceive = userReceiveUsd * (10 ** settleTokens[i.into()].decimals) / (price * 1e10);
                             _closeTradeReceived(tradeHash, to, settleTokens[i.into()].token, userReceive);
                             if (toLp) {
-                                IVault(address(this)).increaseByCloseTrade(settleTokens[i.into()].token, settleTokens[i.into()].amount - userReceive);
+                                IVault(address(this)).increase(settleTokens[i.into()].token, settleTokens[i.into()].amount - userReceive);
                                 emit CloseTradeAddLiquidity(settleTokens[i.into()].token, settleTokens[i.into()].amount - userReceive);
                             } else {
                                 LibTrading.increaseOpenTradeAmount(ts, settleTokens[i.into()].token, settleTokens[i.into()].amount - userReceive);
@@ -324,7 +317,7 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
                             userReceiveUsd = 0;
                         } else {
                             if (toLp) {
-                                IVault(address(this)).increaseByCloseTrade(settleTokens[i.into()].token, settleTokens[i.into()].amount);
+                                IVault(address(this)).increase(settleTokens[i.into()].token, settleTokens[i.into()].amount);
                                 emit CloseTradeAddLiquidity(settleTokens[i.into()].token, settleTokens[i.into()].amount);
                             } else {
                                 LibTrading.increaseOpenTradeAmount(ts, settleTokens[i.into()].token, settleTokens[i.into()].amount);
@@ -344,21 +337,21 @@ contract TradingCloseFacet is ITradingClose, OnlySelf {
         for (UC i = ZERO; i < uc(arr.length); i = i + ONE) {
             TpSlOrLiq memory t = arr[i.into()];
             ITrading.OpenTrade storage ot = ts.openTrades[t.tradeHash];
-            require(ot.margin > 0, "TradingCloseFacet: Trade information does not exist");
-
+            if (ot.margin == 0) {
+                continue;
+            }
             (bool available, uint64 upper, uint64 lower) = IPriceFacade(address(this)).confirmTriggerPrice(ot.pairBase, t.price);
             if (!available) {
                 emit ExecuteCloseRejected(ot.user, t.tradeHash, t.executionType, t.price, 0);
                 continue;
             }
-            uint64 marketPrice = ot.isLong ? lower : upper;
-            uint256 closePrice = ITradingCore(address(this)).slippagePrice(ot.pairBase, marketPrice, ot.qty, !ot.isLong);
-
-            if (!ITradingChecker(address(this)).checkProtectionPrice(ot.pairBase, closePrice, !ot.isLong)) {
-                emit CloseRejectedByProtectionPrice(ot.user, t.tradeHash, closePrice);
-                continue;
+            uint64 marketPrice;
+            if (ot.isLong) {
+                marketPrice = lower < ot.takeProfit ? lower : ot.takeProfit;
+            } else {
+                marketPrice = upper > ot.takeProfit ? upper : ot.takeProfit;
             }
-
+            uint256 closePrice = ITradingCore(address(this)).slippagePrice(ot.pairBase, marketPrice, ot.qty, !ot.isLong);
             if (t.executionType == ExecutionType.TP) {
                 if ((ot.isLong && marketPrice < ot.takeProfit) || (!ot.isLong && marketPrice > ot.takeProfit)) {
                     emit ExecuteCloseRejected(ot.user, t.tradeHash, t.executionType, t.price, marketPrice);

@@ -36,7 +36,7 @@ interface ITradingReader is ITrading {
         uint96 holdingFee;  // marginToken decimals
     }
     enum AssetPurpose {
-        LIMIT, PENDING, POSITION
+        LIMIT, PENDING, POSITION, PREDICTION_PENDING, PREDICTION
     }
     struct TraderAsset {
         AssetPurpose purpose;

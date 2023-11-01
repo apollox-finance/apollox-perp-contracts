@@ -9,6 +9,9 @@ interface ITradingCore {
         address indexed pairBase, uint256 lastBlock, uint256 longQty, uint256 shortQty,
         int256 longAccFundingFeePerShare, uint64 lpLongAvgPrice, uint64 lpShortAvgPrice
     );
+    event UpdatePairAccFundingFeePerShare(
+        address indexed pairBase, uint256 lastBlock, int256 longAccFundingFeePerShare, uint256 marketPrice
+    );
 
     struct PairQty {
         uint256 longQty;
@@ -60,6 +63,8 @@ interface ITradingCore {
     function updatePairPositionInfo(
         address pairBase, uint userPrice, uint marketPrice, uint qty, bool isLong, bool isOpen
     ) external returns (int256 longAccFundingFeePerShare);
+
+    function updatePairPositionInfo(address pairBase) external;
 
     function lpUnrealizedPnlUsd() external view returns (int256 totalUsd, LpMarginTokenUnPnl[] memory);
 

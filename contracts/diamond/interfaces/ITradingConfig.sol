@@ -7,13 +7,12 @@ interface ITradingConfig {
     event SetExecutionFeeUsd(uint256 oldExecutionFeeUsd, uint256 executionFeeUsd);
     event SetMinNotionalUsd(uint256 oldMinNotionalUsd, uint256 minNotionalUsd);
     event SetMaxTakeProfitP(uint24 oldMaxTakeProfitP, uint24 maxTakeProfitP);
-    event UpdateProtectionPrice(address indexed pairBase, uint64 upperPrice, uint64 lowerPrice);
     event SetMaxTpRatioForLeverage(address indexed pairBase, MaxTpRatioForLeverage[] maxTpRatios);
 
     /*
     |-----------> 8 bit <-----------|
     |---|---|---|---|---|---|---|---|
-    |   |   | 5 | 4 | 3 | 2 | 1 | 0 |
+    | 7 | 6 | 5 | 4 | 3 | 2 | 1 | 0 |
     |---|---|---|---|---|---|---|---|
     */
     enum TradingSwitch {
@@ -22,7 +21,9 @@ interface ITradingConfig {
         MARKET_TRADING,
         USER_CLOSE_TRADING,
         TP_SL_CLOSE_TRADING,
-        LIQUIDATE_TRADING
+        LIQUIDATE_TRADING,
+        PREDICTION_BET,
+        PREDICTION_SETTLE
     }
 
     struct TradingConfig {
@@ -37,12 +38,6 @@ interface ITradingConfig {
         bool liquidateTrading;
     }
 
-    struct PriceProtection {
-        uint40 updatedAt;
-        uint64 upperPrice;  // 1e8
-        uint64 lowerPrice;  // 1e8
-    }
-
     struct PriceConfig {
         address pairBase;
         uint64 upperPrice;  // 1e8
@@ -54,24 +49,31 @@ interface ITradingConfig {
         uint24 maxTakeProfitP;
     }
 
+    struct PredictionConfig {
+        uint256 minBetUsd;
+        bool predictionBet;
+        bool predictionSettle;
+    }
+
     function getTradingConfig() external view returns (TradingConfig memory);
+
+    function getPredictionConfig() external view returns (PredictionConfig memory);
 
     function setTradingSwitches(
         bool limitOrder, bool executeLimitOrder, bool marketTrade,
-        bool userCloseTrade, bool tpSlCloseTrade, bool liquidateTrade
+        bool userCloseTrade, bool tpSlCloseTrade, bool liquidateTrade,
+        bool predictBet, bool predictSettle
     ) external;
 
     function setExecutionFeeUsd(uint256 executionFeeUsd) external;
 
     function setMinNotionalUsd(uint256 minNotionalUsd) external;
 
+    function setMinBetUsd(uint256 minBetUsd) external;
+
     function setMaxTakeProfitP(uint24 maxTakeProfitP) external;
 
-    function updateProtectionPrice(PriceConfig[] calldata priceConfigs) external;
-
     function setMaxTpRatioForLeverage(address pairBase, MaxTpRatioForLeverage[] calldata maxTpRatios) external;
-
-    function getProtectionPrice(address pairBase) external view returns (PriceProtection memory);
 
     function getPairMaxTpRatios(address pairBase) external view returns (MaxTpRatioForLeverage[] memory);
 

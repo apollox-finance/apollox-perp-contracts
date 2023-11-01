@@ -66,7 +66,7 @@ library LibChainlinkPrice {
         require(priceFeed != address(0), "LibChainlinkPrice: Price feed does not exist");
         AggregatorV3Interface oracle = AggregatorV3Interface(priceFeed);
         (, int256 price_, ,uint256 updatedAt,) = oracle.latestRoundData();
-        require(price_ > 0, "LibChainlinkPrice: price cannot be negative");        
+        require(price_ > 0, "LibChainlinkPrice: price cannot be negative");
         price = uint256(price_);
         decimals = oracle.decimals();
         return (price, decimals, updatedAt);

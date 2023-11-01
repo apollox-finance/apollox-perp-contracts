@@ -2,6 +2,7 @@
 pragma solidity ^0.8.19;
 
 import "../../utils/Constants.sol";
+import "../../utils/TransferHelper.sol";
 import "../interfaces/ILimitOrder.sol";
 import "../interfaces/IPriceFacade.sol";
 import "../interfaces/IPairsManager.sol";
@@ -12,7 +13,17 @@ import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 contract LimitOrderFacet is ILimitOrder {
 
-    function openLimitOrder(OpenDataInput calldata data) external override {
+    function openLimitOrder(OpenDataInput memory data) external override {
+        _openLimitOrder(data);
+    }
+
+    function openLimitOrderBNB(OpenDataInput memory data) external payable override {
+        data.tokenIn = TransferHelper.nativeWrapped();
+        data.amountIn = uint96(msg.value);
+        _openLimitOrder(data);
+    }
+
+    function _openLimitOrder(OpenDataInput memory data) private {
         ITradingChecker(address(this)).openLimitOrderCheck(data);
         LibLimitOrder.openLimitOrder(data);
     }
@@ -51,7 +62,9 @@ contract LimitOrderFacet is ILimitOrder {
         for (UC i = ZERO; i < uc(executeOrders.length); i = i + ONE) {
             KeeperExecution memory ke = executeOrders[i.into()];
             LimitOrder memory order = los.limitOrders[ke.hash];
-            require(order.amountIn > 0, "LimitOrderFacet: Order does not exist");
+            if (order.amountIn == 0) {
+                continue;
+            }
             (bool available, uint64 upper, uint64 lower) = IPriceFacade(address(this)).confirmTriggerPrice(order.pairBase, ke.price);
             if (!available) {
                 emit ExecuteLimitOrderRejected(order.user, ke.hash, ITradingChecker.Refund.SYSTEM);
@@ -71,7 +84,7 @@ contract LimitOrderFacet is ILimitOrder {
     function getLimitOrderByHash(bytes32 orderHash) public view override returns (LimitOrderView memory) {
         LimitOrder memory o = LibLimitOrder.limitOrderStorage().limitOrders[orderHash];
         return LimitOrderView(
-            orderHash, IPairsManager(address(this)).getPairByBaseV2(o.pairBase).name, o.pairBase, o.isLong,
+            orderHash, IPairsManager(address(this)).getPairByBaseV3(o.pairBase).name, o.pairBase, o.isLong,
             o.tokenIn, o.amountIn, o.qty, o.limitPrice, o.stopLoss, o.takeProfit, o.broker, o.timestamp
         );
     }

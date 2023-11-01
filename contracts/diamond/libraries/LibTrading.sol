@@ -4,9 +4,13 @@ pragma solidity ^0.8.19;
 import "../interfaces/IVault.sol";
 import "../interfaces/ITrading.sol";
 import "../interfaces/ITradingCore.sol";
+import "../interfaces/IPairsManager.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 library LibTrading {
+
+    using Math for uint256;
 
     bytes32 constant TRADING_POSITION = keccak256("apollox.trading.storage");
 
@@ -82,5 +86,23 @@ library LibTrading {
             holdingFee = uint256(ot.entryPrice) * ot.qty * (block.number - ot.openBlock) * ot.holdingFeeRate * (10 ** mt.decimals) / uint256(1e22 * mt.price);
         }
         return holdingFee;
+    }
+
+    function calcCloseFee(
+        IPairsManager.FeeConfig memory feeConfig, IVault.MarginToken memory mt,
+        uint256 closeNotionalUsd, int256 pnl
+    ) internal pure returns (uint256) {
+        if (feeConfig.shareP > 0 && feeConfig.minCloseFeeP > 0) {
+            // closeFeeUsd = max(pnlUsd * shareP, minCloseFeeP * notionalUsd)
+            uint256 minCloseFeeUsd = closeNotionalUsd * feeConfig.minCloseFeeP;
+            if (pnl <= 0) {
+                return minCloseFeeUsd * (10 ** mt.decimals) / (1e5 * 1e10 * mt.price);
+            } else {
+                uint256 closeFeeUsd = uint256(pnl) * mt.price * feeConfig.shareP * 1e10 / (10 ** mt.decimals);
+                return closeFeeUsd.max(minCloseFeeUsd) * (10 ** mt.decimals) / (1e5 * 1e10 * mt.price);
+            }
+        } else {
+            return closeNotionalUsd * feeConfig.closeFeeP * (10 ** mt.decimals) / (1e4 * 1e10 * mt.price);
+        }
     }
 }

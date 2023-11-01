@@ -4,6 +4,17 @@ pragma solidity ^0.8.19;
 import "./ITradingPortal.sol";
 import "./ITradingClose.sol";
 
+/*
+|-----------> 8 bit <-----------|
+|---|---|---|---|---|---|---|---|
+|   |   |   |   |   |   | 1 | 0 |
+|---|---|---|---|---|---|---|---|
+*/
+enum FeatureSwitches {
+    AS_MARGIN,
+    AS_BET
+}
+
 interface IVault {
 
     event CloseTradeRemoveLiquidity(address indexed token, uint256 amount);
@@ -16,6 +27,7 @@ interface IVault {
         bool stable;
         bool dynamicFee;
         bool asMargin;
+        bool asBet;
     }
 
     struct LpItem {
@@ -31,21 +43,21 @@ interface IVault {
 
     struct MarginToken {
         address token;
-        bool asMargin;
+        bool switchOn;
         uint8 decimals;
         uint256 price;
     }
 
     function addToken(
         address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints,
-        bool stable, bool dynamicFee, bool asMargin, uint16[] calldata weights
+        bool stable, bool dynamicFee, bool asMargin, bool asBet, uint16[] calldata weights
     ) external;
 
     function removeToken(address tokenAddress, uint16[] calldata weights) external;
 
     function updateToken(address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool dynamicFee) external;
 
-    function updateAsMargin(address tokenAddress, bool asMargin) external;
+    function updateTokenFeature(address tokenAddress, bool asMargin, bool asBet) external;
 
     function changeWeight(uint16[] calldata weights) external;
 
@@ -53,19 +65,23 @@ interface IVault {
 
     function securityMarginP() external view returns (uint16);
 
-    function tokensV2() external view returns (Token[] memory);
+    function tokensV3() external view returns (Token[] memory);
 
     function getTokenByAddress(address tokenAddress) external view returns (Token memory);
 
     function getTokenForTrading(address tokenAddress) external view returns (MarginToken memory);
 
+    function getTokenForPrediction(address tokenAddress) external view returns (MarginToken memory);
+
     function itemValue(address token) external view returns (LpItem memory lpItem);
 
     function totalValue() external view returns (LpItem[] memory lpItems);
 
-    function increaseByCloseTrade(address tokens, uint256 amounts) external;
+    function increase(address token, uint256 amounts) external;
 
     function decreaseByCloseTrade(address token, uint256 amount) external returns (ITradingClose.SettleToken[] memory);
+
+    function decrease(address token, uint256 amount) external;
 
     function maxWithdrawAbleUsd() external view returns (int256);
 }

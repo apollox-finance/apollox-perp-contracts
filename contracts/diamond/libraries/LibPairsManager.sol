@@ -5,8 +5,8 @@ import "./LibFeeManager.sol";
 import "../interfaces/IPriceFacade.sol";
 import "../interfaces/ITradingCore.sol";
 import "../interfaces/IPairsManager.sol";
-import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 import "../interfaces/ISlippageManager.sol";
+import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 library LibPairsManager {
 
@@ -170,6 +170,8 @@ library LibPairsManager {
         PairsManagerStorage storage pms = pairsManagerStorage();
         Pair storage pair = pms.pairs[base];
         require(pair.base != address(0), "LibPairsManager: Pair does not exist");
+
+        ITradingCore(address(this)).updatePairPositionInfo(base);
 
         uint256 oldFundingFeePerBlockP = pair.fundingFeePerBlockP;
         uint256 oldMinFundingFeeR = pair.minFundingFeeR;

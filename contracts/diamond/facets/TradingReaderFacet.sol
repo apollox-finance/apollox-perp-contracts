@@ -7,6 +7,7 @@ import "../interfaces/ITradingReader.sol";
 import "../libraries/LibTrading.sol";
 import "../libraries/LibLimitOrder.sol";
 import "../libraries/LibTradingCore.sol";
+import "../libraries/LibPredictUpDown.sol";
 
 contract TradingReaderFacet is ITradingReader {
 
@@ -78,13 +79,15 @@ contract TradingReaderFacet is ITradingReader {
     }
 
     function traderAssets(address[] memory tokens) external view override returns (TraderAsset[] memory) {
-        TraderAsset[] memory assets = new TraderAsset[](tokens.length * 3);
+        TraderAsset[] memory assets = new TraderAsset[](tokens.length * 5);
         if (tokens.length > 0) {
             for (uint i; i < tokens.length; i++) {
                 address token = tokens[i];
                 assets[i * 3] = TraderAsset(AssetPurpose.LIMIT, token, LibLimitOrder.limitOrderStorage().limitOrderAmountIns[token]);
                 assets[i * 3 + 1] = TraderAsset(AssetPurpose.PENDING, token, LibTrading.tradingStorage().pendingTradeAmountIns[token]);
                 assets[i * 3 + 2] = TraderAsset(AssetPurpose.POSITION, token, LibTrading.tradingStorage().openTradeAmountIns[token]);
+                assets[i * 3 + 3] = TraderAsset(AssetPurpose.PREDICTION_PENDING, token, LibPredictUpDown.predictionUpDownStorage().pendingPredictionAmountIns[token]);
+                assets[i * 3 + 4] = TraderAsset(AssetPurpose.PREDICTION, token, LibPredictUpDown.predictionUpDownStorage().openPredictionAmountIns[token]);
             }
         }
         return assets;

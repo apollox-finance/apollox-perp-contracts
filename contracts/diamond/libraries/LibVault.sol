@@ -1,22 +1,21 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.19;
 
+import "../../utils/Bits.sol";
 import "../../utils/Constants.sol";
+import "../../utils/TransferHelper.sol";
 import "../../dependencies/IWBNB.sol";
-import "../interfaces/IVault.sol";
-import "../interfaces/ITradingCore.sol";
+import {FeatureSwitches, IVault} from "../interfaces/IVault.sol";
 import "../interfaces/ITrading.sol";
+import "../interfaces/ITradingCore.sol";
+import "../interfaces/ITradingClose.sol";
 import "./LibPriceFacade.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
-import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {ZERO, ONE, UC, uc, into} from "unchecked-counter/src/UC.sol";
 
 library LibVault {
 
-    using Address for address payable;
-    using SafeERC20 for IERC20;
+    using Bits for uint;
 
     bytes32 constant VAULT_POSITION = keccak256("apollox.vault.storage");
 
@@ -29,7 +28,7 @@ library LibVault {
         uint8 decimals;
         bool stable;
         bool dynamicFee;
-        bool asMargin;
+        uint8 featureSwitches;
     }
 
     struct VaultStorage {
@@ -37,7 +36,7 @@ library LibVault {
         address[] tokenAddresses;
         // tokenAddress => amount
         mapping(address => uint256) treasury;
-        address wbnb;
+        address wbnb;             // obsolete
         address exchangeTreasury; // obsolete
         uint16 securityMarginP;   // 1e4
     }
@@ -51,7 +50,7 @@ library LibVault {
 
     event AddToken(
         address indexed token, uint16 weight, uint16 feeBasisPoints,
-        uint16 taxBasisPoints, bool stable, bool dynamicFee, bool asMargin
+        uint16 taxBasisPoints, bool stable, bool dynamicFee, uint8 featureSwitches
     );
     event RemoveToken(address indexed token);
     event UpdateToken(
@@ -59,24 +58,14 @@ library LibVault {
         uint16 oldFeeBasisPoints, uint16 oldTaxBasisPoints, bool oldDynamicFee,
         uint16 feeBasisPoints, uint16 taxBasisPoints, bool dynamicFee
     );
-    event SupportTokenAsMargin(address indexed tokenAddress, bool supported);
+    event UpdateTokenFeature(address indexed tokenAddress, uint8 featureSwitches);
     event ChangeWeight(address[] tokenAddress, uint16[] oldWeights, uint16[] newWeights);
     event SetSecurityMarginP(uint16 oldSecurityMarginP, uint16 securityMarginP);
     event CloseTradeRemoveLiquidity(address indexed token, uint256 amount);
 
-    function initialize(address wbnb) internal {
-        VaultStorage storage vs = vaultStorage();
-        require(vs.wbnb == address(0), "LibVault: Already initialized");
-        vs.wbnb = wbnb;
-    }
-
-    function WBNB() internal view returns (address) {
-        return vaultStorage().wbnb;
-    }
-
     function addToken(
         address tokenAddress, uint16 feeBasisPoints, uint16 taxBasisPoints, bool stable,
-        bool dynamicFee, bool asMargin, uint16[] calldata weights
+        bool dynamicFee, uint8 featureSwitches, uint16[] calldata weights
     ) internal {
         VaultStorage storage vs = vaultStorage();
         AvailableToken storage at = vs.tokens[tokenAddress];
@@ -88,10 +77,10 @@ library LibVault {
         at.decimals = IERC20Metadata(tokenAddress).decimals();
         at.stable = stable;
         at.dynamicFee = dynamicFee;
-        at.asMargin = asMargin;
+        at.featureSwitches = featureSwitches;
 
         vs.tokenAddresses.push(tokenAddress);
-        emit AddToken(at.tokenAddress, weights[weights.length - 1], at.feeBasisPoints, at.taxBasisPoints, at.stable, at.dynamicFee, at.asMargin);
+        emit AddToken(at.tokenAddress, weights[weights.length - 1], at.feeBasisPoints, at.taxBasisPoints, at.stable, at.dynamicFee, featureSwitches);
         changeWeight(weights);
     }
 
@@ -125,12 +114,12 @@ library LibVault {
         emit UpdateToken(tokenAddress, oldFeePoints, oldTaxPoints, oldDynamicFee, feeBasisPoints, taxBasisPoints, dynamicFee);
     }
 
-    function updateAsMargin(address tokenAddress, bool asMargin) internal {
+    function updateTokenFeature(address tokenAddress, uint8 featureSwitches) internal {
         AvailableToken storage at = vaultStorage().tokens[tokenAddress];
         require(at.tokenAddress != address(0), "LibVault: Token does not exist");
-        require(at.asMargin != asMargin, "LibVault: No modification required");
-        at.asMargin = asMargin;
-        emit SupportTokenAsMargin(tokenAddress, asMargin);
+        require(at.featureSwitches != featureSwitches, "LibVault: No modification required");
+        at.featureSwitches = featureSwitches;
+        emit UpdateTokenFeature(tokenAddress, featureSwitches);
     }
 
     function changeWeight(uint16[] calldata weights) internal {
@@ -156,25 +145,6 @@ library LibVault {
         emit SetSecurityMarginP(old, securityMarginP);
     }
 
-    function deposit(address token, uint256 amount) internal {
-        deposit(token, amount, address(0), true);
-    }
-
-    // The caller checks whether the token exists and the amount>0
-    // in order to return quickly in case of an error
-    function deposit(address token, uint256 amount, address from, bool transferred) internal {
-        if (!transferred) {
-            IERC20(token).safeTransferFrom(from, address(this), amount);
-        }
-        LibVault.VaultStorage storage vs = vaultStorage();
-        vs.treasury[token] += amount;
-    }
-
-    function depositBNB(uint256 amount) internal {
-        IWBNB(WBNB()).deposit{value: amount}();
-        deposit(WBNB(), amount);
-    }
-
     function decreaseByCloseTrade(address token, uint256 amount) internal returns (ITradingClose.SettleToken[] memory settleTokens) {
         VaultStorage storage vs = vaultStorage();
         uint8 token_0_decimals = vs.tokens[token].decimals;
@@ -198,7 +168,7 @@ library LibVault {
             for (UC i = ZERO; i < uc(allTokens.length); i = i + ONE) {
                 address tokenAddress = allTokens[i.into()];
                 AvailableToken memory at = vs.tokens[tokenAddress];
-                if (at.asMargin && tokenAddress != token && vs.treasury[tokenAddress] > 0) {
+                if (uint(at.featureSwitches).bitSet(uint8(FeatureSwitches.AS_MARGIN)) && tokenAddress != token && vs.treasury[tokenAddress] > 0) {
                     uint256 balanceUsd = vs.treasury[tokenAddress] * LibPriceFacade.getPrice(tokenAddress) * 1e10 / (10 ** at.decimals);
                     balances[index.into()] = ITrading.MarginBalance(tokenAddress, LibPriceFacade.getPrice(tokenAddress), at.decimals, balanceUsd);
                     totalBalanceUsd += balanceUsd;
@@ -226,25 +196,6 @@ library LibVault {
             emit CloseTradeRemoveLiquidity(b.token, settleTokens[index.into()].amount);
             return settleTokens;
         }
-    }
-
-    // The caller checks whether the token exists and the amount>0
-    // in order to return quickly in case of an error
-    function withdraw(address receiver, address token, uint256 amount) internal {
-        LibVault.VaultStorage storage vs = vaultStorage();
-        require(vs.treasury[token] >= amount, "LibVault: Treasury insufficient balance");
-        vs.treasury[token] -= amount;
-        IERC20(token).safeTransfer(receiver, amount);
-    }
-
-    // The entry for calling this method needs to prevent reentry
-    // use "../security/RentalGuard.sol"
-    function withdrawBNB(address payable receiver, uint256 amount) internal {
-        LibVault.VaultStorage storage vs = vaultStorage();
-        require(vs.treasury[WBNB()] >= amount, "LibVault: Treasury insufficient balance");
-        IWBNB(WBNB()).withdraw(amount);
-        vs.treasury[WBNB()] -= amount;
-        receiver.sendValue(amount);
     }
 
     function getTotalValueUsd() internal view returns (int256) {

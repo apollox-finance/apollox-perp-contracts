@@ -35,6 +35,15 @@ contract PairsManagerFacet is IPairsManager {
         LibPairsManager.updatePairMaxOi(base, maxLongOiUsd, maxShortOiUsd);
     }
 
+    function batchUpdatePairMaxOi(UpdatePairMaxOiParam[] calldata params) external override {
+        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
+        for (UC i = ZERO; i < uc(params.length); i = i + ONE) {
+            UpdatePairMaxOiParam calldata param = params[i.into()];
+            require(param.base != address(0), "PairsManagerFacet: base cannot be 0 address");
+            LibPairsManager.updatePairMaxOi(param.base, param.maxLongOiUsd, param.maxShortOiUsd);
+        }
+    }
+
     function updatePairHoldingFeeRate(address base, uint40 longHoldingFeeRate, uint40 shortHoldingFeeRate) external override {
         LibAccessControlEnumerable.checkRole(Constants.PAIR_OPERATOR_ROLE);
         require(base != address(0), "PairsManagerFacet: base cannot be 0 address");
@@ -121,7 +130,7 @@ contract PairsManagerFacet is IPairsManager {
         }
     }
 
-    function pairsV2() external view override returns (PairView[] memory) {
+    function pairsV3() external view override returns (PairView[] memory) {
         LibPairsManager.PairsManagerStorage storage pms = LibPairsManager.pairsManagerStorage();
         address[] memory bases = pms.pairBases;
         PairView[] memory pairViews = new PairView[](bases.length);
@@ -132,7 +141,7 @@ contract PairsManagerFacet is IPairsManager {
         return pairViews;
     }
 
-    function getPairByBaseV2(address base) external view override returns (PairView memory) {
+    function getPairByBaseV3(address base) external view override returns (PairView memory) {
         LibPairsManager.PairsManagerStorage storage pms = LibPairsManager.pairsManagerStorage();
         LibPairsManager.Pair storage pair = pms.pairs[base];
         return _pairToView(pair, pms.slippageConfigs[pair.slippageConfigIndex]);
@@ -174,7 +183,7 @@ contract PairsManagerFacet is IPairsManager {
 
     function _convertFeeRate(uint16 feeIndex) private view returns (FeeConfig memory) {
         (LibFeeManager.FeeConfig memory fc,) = LibFeeManager.getFeeConfigByIndex(feeIndex);
-        return FeeConfig(fc.openFeeP, fc.closeFeeP);
+        return FeeConfig(fc.openFeeP, fc.closeFeeP, fc.shareP, fc.minCloseFeeP);
     }
 
     function _convertSlippage(LibPairsManager.SlippageConfig memory sc) private pure returns (ISlippageManager.SlippageConfig memory) {

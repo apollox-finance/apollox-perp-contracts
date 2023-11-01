@@ -13,10 +13,12 @@ contract TradingConfigFacet is ITradingConfig {
 
     using Bits for uint;
 
-    function initTradingConfigFacet(uint256 executionFeeUsd, uint256 minNotionalUsd, uint24 maxTakeProfitP) external {
-        require(minNotionalUsd > 0 && maxTakeProfitP > 0, "TradingConfigFacet: Invalid parameter");
+    function initTradingConfigFacet(
+        uint256 executionFeeUsd, uint256 minNotionalUsd, uint24 maxTakeProfitP, uint256 minBetUsd
+    ) external {
+        require(minNotionalUsd > 0 && maxTakeProfitP > 0 && minBetUsd > 0, "TradingConfigFacet: Invalid parameter");
         LibAccessControlEnumerable.checkRole(Constants.DEPLOYER_ROLE);
-        LibTradingConfig.initialize(executionFeeUsd, minNotionalUsd, maxTakeProfitP);
+        LibTradingConfig.initialize(executionFeeUsd, minNotionalUsd, maxTakeProfitP, minBetUsd);
     }
 
     function getTradingConfig() external view override returns (TradingConfig memory) {
@@ -30,9 +32,20 @@ contract TradingConfigFacet is ITradingConfig {
         );
     }
 
+    function getPredictionConfig() external view returns (PredictionConfig memory) {
+        LibTradingConfig.TradingConfigStorage storage tcs = LibTradingConfig.tradingConfigStorage();
+        uint switches = tcs.tradingSwitches;
+        return PredictionConfig(
+            tcs.minBetUsd,
+            switches.bitSet(uint8(TradingSwitch.PREDICTION_BET)),
+            switches.bitSet(uint8(TradingSwitch.PREDICTION_SETTLE))
+        );
+    }
+
     function setTradingSwitches(
         bool limitOrder, bool executeLimitOrder, bool marketTrade,
-        bool userCloseTrade, bool tpSlCloseTrade, bool liquidateTradeSwitch
+        bool userCloseTrade, bool tpSlCloseTrade, bool liquidateTradeSwitch,
+        bool predictBet, bool predictSettle
     ) external override {
         LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
         uint tradeSwitches = 0;
@@ -42,6 +55,8 @@ contract TradingConfigFacet is ITradingConfig {
         tradeSwitches = tradeSwitches.setOrClearBit(uint8(TradingSwitch.USER_CLOSE_TRADING), userCloseTrade);
         tradeSwitches = tradeSwitches.setOrClearBit(uint8(TradingSwitch.TP_SL_CLOSE_TRADING), tpSlCloseTrade);
         tradeSwitches = tradeSwitches.setOrClearBit(uint8(TradingSwitch.LIQUIDATE_TRADING), liquidateTradeSwitch);
+        tradeSwitches = tradeSwitches.setOrClearBit(uint8(TradingSwitch.PREDICTION_BET), predictBet);
+        tradeSwitches = tradeSwitches.setOrClearBit(uint8(TradingSwitch.PREDICTION_SETTLE), predictSettle);
         LibTradingConfig.setTradingSwitches(uint16(tradeSwitches));
     }
 
@@ -55,31 +70,26 @@ contract TradingConfigFacet is ITradingConfig {
         LibTradingConfig.setMinNotionalUsd(minNotionalUsd);
     }
 
+    function setMinBetUsd(uint256 minBetUsd) external override {
+        LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
+        LibTradingConfig.setMinBetUsd(minBetUsd);
+    }
+
     function setMaxTakeProfitP(uint24 maxTakeProfitP) external override {
         LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
         LibTradingConfig.setMaxTakeProfitP(maxTakeProfitP);
     }
 
-    function updateProtectionPrice(PriceConfig[] calldata priceConfigs) external override {
-        LibAccessControlEnumerable.checkRole(Constants.MONITOR_ROLE);
-        require(priceConfigs.length > 0, "TradingConfigFacet: Parameters cannot be empty");
-        LibTradingConfig.updateProtectionPrice(priceConfigs);
-    }
-
     function setMaxTpRatioForLeverage(address pairBase, MaxTpRatioForLeverage[] calldata maxTpRatios) external override {
         LibAccessControlEnumerable.checkRole(Constants.ADMIN_ROLE);
         require(
-            pairBase != address(0) && IPairsManager(address(this)).getPairByBaseV2(pairBase).base != address(0),
+            pairBase != address(0) && IPairsManager(address(this)).getPairByBaseV3(pairBase).base != address(0),
             "TradingConfigFacet: pair does not exist"
         );
         LibTradingConfig.setMaxTpRatioForLeverage(pairBase, maxTpRatios);
     }
 
-    function getProtectionPrice(address pairBase) external view override returns (PriceProtection memory) {
-        return LibTradingConfig.tradingConfigStorage().priceProtections[pairBase];
-    }
-
-        function getPairMaxTpRatios(address pairBase) external view override returns (MaxTpRatioForLeverage[] memory) {
+    function getPairMaxTpRatios(address pairBase) external view override returns (MaxTpRatioForLeverage[] memory) {
         return LibTradingConfig.tradingConfigStorage().maxTpRatios[pairBase];
     }
 
